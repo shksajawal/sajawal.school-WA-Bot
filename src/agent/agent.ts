@@ -105,7 +105,7 @@ export async function generateReply(
 
   const finalMessage = await client.beta.messages.toolRunner({
     model: config.anthropic.model,
-    max_tokens: 2048,
+    max_tokens: 8192,
     system: [
       {
         type: "text",
@@ -125,5 +125,10 @@ export async function generateReply(
     .join("\n")
     .trim();
 
+  if (!text) {
+    console.error(
+      `generateReply produced no text for contact ${contact.id} (stop_reason=${finalMessage.stop_reason})`,
+    );
+  }
   return text || null;
 }
