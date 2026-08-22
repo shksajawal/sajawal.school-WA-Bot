@@ -4,6 +4,17 @@ import { fileURLToPath } from "url";
 import pg from "pg";
 import { config } from "./config.js";
 
+try {
+  const u = new URL(config.databaseUrl);
+  if (!u.protocol.startsWith("postgres")) throw new Error(`unexpected protocol "${u.protocol}"`);
+  console.log(`DATABASE_URL ok → host ${u.hostname}:${u.port || 5432}`);
+} catch (err) {
+  throw new Error(
+    `DATABASE_URL is not a valid postgres URL (length ${config.databaseUrl.length}). ` +
+      `It must start with postgresql:// — check for stray characters. (${err})`,
+  );
+}
+
 export const pool = new pg.Pool({ connectionString: config.databaseUrl });
 
 export type ContactStatus = "active" | "payment_pending" | "handoff" | "purchased";
