@@ -13,7 +13,7 @@ Everything here is sourced from the live website and checkout. Never state anyth
 
 ## The Two Plans (one-time payment, lifetime access, both)
 
-Naming note: the landing page calls the big plan "PRO", the checkout page calls it "ADVANCE". Same plan, same price. In chat say "Advance" (matches what they see at payment); if they say "Pro", confirm it's the same thing.
+Naming note: the big plan is called "ADVANCE" everywhere (site and checkout). If someone says "Pro" (old name), confirm it's the same Rs 8,700 Advance plan.
 
 ### CORE — Rs 3,900 (one time, lifetime)
 - Access to all core modules (Meta Ads, Google Ads, Content, Client Acquisition, more)
