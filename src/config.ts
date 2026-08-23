@@ -35,6 +35,9 @@ export const config = {
     datasetId: required("META_DATASET_ID"),
     accessToken: optional("META_CAPI_ACCESS_TOKEN") ?? required("WA_ACCESS_TOKEN"),
     testEventCode: optional("META_TEST_EVENT_CODE"),
+    // Meta rejects business_messaging events without it. Optional here on purpose:
+    // a missing value must not crash a bot that is mid-conversation with buyers.
+    pageId: optional("META_PAGE_ID"),
   },
 
   anthropic: {

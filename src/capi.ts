@@ -22,6 +22,10 @@ export async function sendCapiEvent(
 ): Promise<boolean> {
   const eventId = opts.eventId ?? `${eventName.toLowerCase()}:${contact.id}`;
 
+  // Meta hard-requires ctwa_clid on business_messaging events (subcode 2804071).
+  // Organic contacts have none, so their events can never land — skip the call.
+  if (!contact.ctwa_clid) return false;
+
   try {
     // Idempotency: one success per event_id (e.g. one QualifiedLead per contact)
     if (await capiEventExists(eventId)) return true;
@@ -36,6 +40,7 @@ export async function sendCapiEvent(
           event_id: eventId,
           user_data: {
             whatsapp_business_account_id: config.whatsapp.wabaId,
+            ...(config.capi.pageId ? { page_id: config.capi.pageId } : {}),
             ...(contact.ctwa_clid ? { ctwa_clid: contact.ctwa_clid } : {}),
             ph: [sha256(contact.wa_id)],
           },

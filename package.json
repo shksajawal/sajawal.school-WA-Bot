@@ -10,7 +10,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc && cp src/agent/knowledge.md dist/agent/",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:capi": "node scripts/verify-capi.mjs",
+    "backfill:capi": "node scripts/backfill-capi.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
