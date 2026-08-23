@@ -143,22 +143,27 @@ async function visionCheck(image: Buffer, mimeType: string): Promise<PaymentChec
 
   const amountOk =
     parsed.amount_pkr !== null && config.payment.validAmounts.includes(parsed.amount_pkr);
-  const baseOk =
-    parsed.is_payment_screenshot &&
-    !parsed.suspicious &&
-    parsed.confidence === "high" &&
-    amountOk &&
-    parsed.transaction_reference !== null;
-
   const recipient = recipientCheck(parsed.recipient_name, parsed.recipient_number);
+  const isPayment = parsed.is_payment_screenshot;
 
-  // Three tiers:
-  //  - recipient matches an anchor → auto-verify
-  //  - recipient illegible/absent but everything else clean → human confirms
-  //  - recipient is visibly someone else → treat as suspicious, never approve
-  const verified = baseOk && recipient === "match";
-  const needsHuman = baseOk && recipient === "unknown";
-  const suspicious = parsed.suspicious || (baseOk && recipient === "mismatch");
+  // Deliberately lenient: the check's job is "a real payment, into OUR
+  // accounts" — not OCR perfection. Reference and high confidence are NOT
+  // required to approve; anything ambiguous goes to a human instead of
+  // bouncing a paying customer.
+  //  - payment screenshot + our account + right amount → auto-verify
+  //  - payment screenshot + our account, but amount unreadable/odd or low
+  //    confidence → human confirms
+  //  - recipient illegible entirely → human confirms
+  //  - visibly paid to someone else, or looks doctored → suspicious, never approved
+  //  - not a payment screenshot at all → rejected (ask for the actual receipt)
+  const verified =
+    isPayment && !parsed.suspicious && recipient === "match" && amountOk && parsed.confidence !== "low";
+  const needsHuman =
+    isPayment &&
+    !parsed.suspicious &&
+    !verified &&
+    (recipient === "match" || recipient === "unknown");
+  const suspicious = parsed.suspicious || (isPayment && recipient === "mismatch");
 
   return {
     verified,
