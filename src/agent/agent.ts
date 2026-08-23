@@ -123,6 +123,10 @@ export async function generateReply(
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
     .join("\n")
+    // Hard guarantee, independent of the prompt: no em/en dashes ever reach
+    // a customer — the #1 "this is AI" tell. Replaced with a comma pause.
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/,\s*,/g, ", ")
     .trim();
 
   if (!text) {

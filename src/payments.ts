@@ -10,6 +10,8 @@ export interface PaymentCheck {
   amount: number | null;
   reference: string | null;
   suspicious: boolean;
+  /** Amount+reference look right but the recipient isn't visible — a human should confirm. */
+  needsHuman: boolean;
   reason: string;
 }
 
@@ -18,11 +20,47 @@ const ScreenshotSchema = z.object({
   amount_pkr: z.number().nullable(),
   transaction_reference: z.string().nullable(),
   bank_or_app: z.string().nullable(),
-  recipient_visible: z.string().nullable(),
+  recipient_name: z
+    .string()
+    .nullable()
+    .describe("Receiver's name/title EXACTLY as shown (may be partial, e.g. 'Shazal A.' or 'SAJAWAL.SCHOOL')"),
+  recipient_number: z
+    .string()
+    .nullable()
+    .describe("Receiver's account/IBAN/wallet number EXACTLY as shown, including masking (e.g. '0300*****2773')"),
   suspicious: z.boolean().describe("True if the image looks edited, cropped to hide fields, or otherwise doctored"),
   confidence: z.enum(["high", "medium", "low"]),
   notes: z.string(),
 });
+
+/**
+ * Real receipts rarely show full recipient details — Easypaisa/JazzCash mask
+ * the wallet ('0300*****2773'), banks truncate titles, some apps show only a
+ * first name. Match on partial anchors, the same approach as the website's
+ * OCR keyword list. Result: "match" (an anchor hit), "mismatch" (recipient
+ * clearly someone else), or "unknown" (nothing legible either way).
+ */
+function recipientCheck(name: string | null, number: string | null): "match" | "mismatch" | "unknown" {
+  const nameNorm = (name ?? "").toLowerCase();
+  const digits = (number ?? "").replace(/\D/g, "");
+
+  const nameHit =
+    nameNorm.includes("sajawal") || nameNorm.includes("school") || nameNorm.includes("shazal");
+
+  const numberHit =
+    // Allied Bank account / IBAN — full or trailing digits
+    digits.includes("82980035") ||
+    // Easypaisa/JazzCash wallet — full, unmasked
+    digits.includes("03000132773") ||
+    digits.includes("923000132773") ||
+    // Masked wallet: prefix + suffix pair survives '0300*****2773'
+    (digits.includes("0300") && digits.endsWith("2773"));
+
+  if (nameHit || numberHit) return "match";
+
+  const somethingVisible = nameNorm.trim().length >= 3 || digits.length >= 4;
+  return somethingVisible ? "mismatch" : "unknown";
+}
 
 type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
@@ -55,6 +93,7 @@ async function ocrServiceCheck(image: Buffer, mimeType: string): Promise<Payment
       amount: typeof json.amount === "number" ? json.amount : null,
       reference: typeof json.reference === "string" ? json.reference : null,
       suspicious: false,
+      needsHuman: false,
       reason: "ocr_service",
     };
   } catch (err) {
@@ -82,7 +121,7 @@ async function visionCheck(image: Buffer, mimeType: string): Promise<PaymentChec
           },
           {
             type: "text",
-            text: "This image was sent as proof of a bank transfer payment for a course in Pakistan (bank app, JazzCash, Easypaisa, or Raast screenshot). Extract the payment facts. Be strict: if amount or transaction reference are not clearly legible, report them as null. Flag anything that looks edited or doctored.",
+            text: "This image was sent as proof of a bank transfer payment for a course in Pakistan (bank app, JazzCash, Easypaisa, SadaPay, or Raast screenshot). Extract the payment facts. Be strict: if amount or transaction reference are not clearly legible, report them as null. Copy the recipient name and recipient account/wallet number EXACTLY as displayed, including masking asterisks and partial text — do not guess or complete them. Flag anything that looks edited or doctored.",
           },
         ],
       },
@@ -92,24 +131,48 @@ async function visionCheck(image: Buffer, mimeType: string): Promise<PaymentChec
 
   const parsed = response.parsed_output;
   if (!parsed) {
-    return { verified: false, amount: null, reference: null, suspicious: false, reason: "vision_parse_failed" };
+    return {
+      verified: false,
+      amount: null,
+      reference: null,
+      suspicious: false,
+      needsHuman: false,
+      reason: "vision_parse_failed",
+    };
   }
 
   const amountOk =
     parsed.amount_pkr !== null && config.payment.validAmounts.includes(parsed.amount_pkr);
-  const verified =
+  const baseOk =
     parsed.is_payment_screenshot &&
     !parsed.suspicious &&
     parsed.confidence === "high" &&
     amountOk &&
     parsed.transaction_reference !== null;
 
+  const recipient = recipientCheck(parsed.recipient_name, parsed.recipient_number);
+
+  // Three tiers:
+  //  - recipient matches an anchor → auto-verify
+  //  - recipient illegible/absent but everything else clean → human confirms
+  //  - recipient is visibly someone else → treat as suspicious, never approve
+  const verified = baseOk && recipient === "match";
+  const needsHuman = baseOk && recipient === "unknown";
+  const suspicious = parsed.suspicious || (baseOk && recipient === "mismatch");
+
   return {
     verified,
     amount: parsed.amount_pkr,
     reference: parsed.transaction_reference,
-    suspicious: parsed.suspicious,
-    reason: verified ? "vision_verified" : `vision_rejected: ${parsed.notes}`,
+    suspicious,
+    needsHuman,
+    reason: verified
+      ? "vision_verified"
+      : recipient === "mismatch"
+        ? `recipient_mismatch: paid to "${parsed.recipient_name ?? parsed.recipient_number}"`
+        : needsHuman
+          ? "recipient_not_visible"
+          : `vision_rejected: ${parsed.notes}`,
   };
 }
 

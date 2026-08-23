@@ -147,9 +147,18 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
       await updateContact(contact.id, { status: "handoff" });
       await sendBotText(
         contact,
-        "Shukriya! Aap ki payment team verify kar rahi hai — thori der mein confirm kar dete hain. 🙏",
+        "Shukriya! Aap ki payment team verify kar rahi hai, thori der mein confirm kar dete hain. 🙏",
       );
       await alertOps(contact, `⚠️ Suspicious payment screenshot flagged: ${check.reason}`);
+    } else if (check.needsHuman) {
+      // Amount + reference clean but recipient not visible on the receipt —
+      // a human confirms instead of auto-approving or bouncing the buyer.
+      await updateContact(contact.id, { status: "handoff" });
+      await sendBotText(
+        contact,
+        "Shukriya! Screenshot mil gaya hai, team abhi verify kar ke confirm karti hai. 🙏",
+      );
+      await alertOps(contact, `🔍 Payment needs manual check (recipient not visible): Rs ${check.amount ?? "?"} ref ${check.reference ?? "?"}`);
     } else {
       await sendBotText(
         contact,
