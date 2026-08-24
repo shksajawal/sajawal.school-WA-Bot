@@ -46,3 +46,15 @@ CREATE TABLE IF NOT EXISTS capi_events (
   response JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Persist the payment screenshot itself: WhatsApp deletes media after ~30 days,
+-- and the screenshot is the audit trail for every sale.
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot BYTEA;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_mime TEXT;
+
+-- 'handoff' retired 2026-08-25: human support lives on a separate WhatsApp line
+-- now and the bot never goes mute. Release legacy rows each boot (no-op once drained).
+UPDATE contacts SET status = CASE
+  WHEN EXISTS (SELECT 1 FROM payments p WHERE p.contact_id = contacts.id AND p.verified)
+  THEN 'purchased' ELSE 'active' END
+WHERE status = 'handoff';

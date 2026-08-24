@@ -21,6 +21,7 @@ import {
 import { downloadMedia, markReadWithTyping, sendText } from "../whatsapp.js";
 import { sendCapiEvent } from "../capi.js";
 import { verifyPaymentScreenshot } from "../payments.js";
+import { handleOpsMessage, isOpsNumber } from "../ops.js";
 import { generateReply } from "../agent/agent.js";
 
 interface WebhookMessage {
@@ -46,9 +47,11 @@ interface WebhookValue {
 }
 
 async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Promise<void> {
-  // The ops number messages this line to keep its 24h window open — never treat
-  // the operator as a customer and never try to sell to them.
-  if (config.opsAlertNumber && m.from === config.opsAlertNumber) return;
+  // Team numbers get the read-only ops interface — never the sales agent.
+  if (isOpsNumber(m.from)) {
+    if (m.type === "text" && m.text?.body) await handleOpsMessage(m.from, m.text.body);
+    return;
+  }
 
   const profileName = value.contacts?.find((c) => c.wa_id === m.from)?.profile?.name ?? null;
 
@@ -85,8 +88,9 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
     await sendCapiEvent(contact, "LeadSubmitted", { eventId: `leadsubmitted:${contact.id}` });
   }
 
-  // Humans own handed-off conversations — the bot stays silent
-  if (contact.status === "handoff") return;
+  // Handoff-mute retired 2026-08-25: support lives on its own WhatsApp line and
+  // the bot never goes silent. Payment disputes park in payment_review, where
+  // the agent still replies but leaves the disputed payment to the team.
 
   if (m.type === "image" && m.image) {
     await handlePaymentScreenshot(contact, m.image.id, m.image.mime_type);
@@ -116,8 +120,10 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
         reference: check.reference,
         verified: false,
         detail: { ...check, rejected: "duplicate_reference" },
+        screenshot: buffer,
+        screenshotMime: actualMime || mimeType,
       });
-      await updateContact(contact.id, { status: "handoff" });
+      await updateContact(contact.id, { status: "payment_review" });
       await sendBotText(
         contact,
         "Is transaction reference ke against pehle se aik payment record hai. Team member abhi check kar ke aap se raabta karega. 🙏",
@@ -133,6 +139,8 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
       reference: check.reference,
       verified: check.verified,
       detail: check,
+      screenshot: buffer,
+      screenshotMime: actualMime || mimeType,
     });
 
     if (check.verified && check.amount) {
@@ -148,7 +156,7 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
       );
       await alertOps(contact, `✅ Purchase verified: Rs ${check.amount} (ref ${check.reference ?? "n/a"})`);
     } else if (check.suspicious) {
-      await updateContact(contact.id, { status: "handoff" });
+      await updateContact(contact.id, { status: "payment_review" });
       await sendBotText(
         contact,
         "Shukriya! Aap ki payment team verify kar rahi hai, thori der mein confirm kar dete hain. 🙏",
@@ -157,7 +165,7 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
     } else if (check.needsHuman) {
       // Amount + reference clean but recipient not visible on the receipt —
       // a human confirms instead of auto-approving or bouncing the buyer.
-      await updateContact(contact.id, { status: "handoff" });
+      await updateContact(contact.id, { status: "payment_review" });
       await sendBotText(
         contact,
         "Shukriya! Screenshot mil gaya hai, team abhi verify kar ke confirm karti hai. 🙏",
@@ -171,7 +179,7 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
     }
   } catch (err) {
     console.error("Payment screenshot handling failed:", err);
-    await updateContact(contact.id, { status: "handoff" });
+    await updateContact(contact.id, { status: "payment_review" });
     await sendBotText(
       contact,
       "Aap ka screenshot mil gaya hai — team verify kar ke jald confirm karegi. Shukriya! 🙏",
@@ -186,14 +194,19 @@ async function sendBotText(contact: Contact, text: string): Promise<void> {
 }
 
 async function alertOps(contact: Contact, note: string): Promise<void> {
-  if (!config.opsAlertNumber) return;
-  try {
-    await sendText(
-      config.opsAlertNumber,
-      `${note}\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})`,
-    );
-  } catch (err) {
-    console.error("Ops alert failed:", err);
+  const targets = [
+    ...new Set(
+      [config.opsAlertNumber, config.ops.adminNumber, config.ops.supportNumber].filter(
+        (n): n is string => Boolean(n),
+      ),
+    ),
+  ];
+  for (const to of targets) {
+    try {
+      await sendText(to, `${note}\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})`);
+    } catch (err) {
+      console.error("Ops alert failed:", err);
+    }
   }
 }
 
@@ -223,7 +236,8 @@ export function startReplyWorker(): Worker {
       if (newest !== null && newest > afterMessageId) return;
 
       const contact = await getContact(contactId);
-      if (!contact || contact.status === "handoff") return;
+      // payment_review still gets replies — only the disputed payment waits for the team
+      if (!contact) return;
 
       const history = await getRecentMessages(contactId);
       const reply = await generateReply(contact, history);

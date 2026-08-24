@@ -23,7 +23,7 @@ export function startFollowupWorker(): Worker {
       if (!contact) return;
 
       // Stop conditions: bought, escalated, exceeded cap
-      if (contact.status === "purchased" || contact.status === "handoff") return;
+      if (contact.status === "purchased" || contact.status === "payment_review") return;
       if (touch > config.followup.maxTouches) return;
 
       // User replied since this was scheduled → the live conversation owns them now

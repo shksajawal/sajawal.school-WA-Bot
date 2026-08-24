@@ -71,4 +71,11 @@ export const config = {
   },
 
   opsAlertNumber: optional("OPS_ALERT_NUMBER"),
+
+  ops: {
+    // WhatsApp numbers that get the read-only team interface instead of the
+    // sales agent. Deliberately no write/admin commands — fetch only.
+    adminNumber: optional("ADMIN_NUMBER"),
+    supportNumber: optional("SUPPORT_NUMBER"),
+  },
 };

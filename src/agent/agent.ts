@@ -62,24 +62,31 @@ function buildTools(contact: Contact) {
   const requestHumanHandoff = betaZodTool({
     name: "request_human_handoff",
     description:
-      "Escalate this conversation to a human team member. The bot will stop replying until a human takes over. Use for anger, refunds, payment disputes, blocked sales questions, or explicit requests for a human.",
+      "ONLY for payment disputes and refund claims. Flags the payment for team review and alerts the team — you KEEP replying to everything else. Never use for hiring, support, or unanswered questions; route those with the links in your instructions.",
     inputSchema: z.object({
       reason: z.string().describe("One sentence: why this needs a human"),
     }),
     run: async (input) => {
-      await updateContact(contact.id, { status: "handoff" });
-      contact.status = "handoff";
-      if (config.opsAlertNumber) {
+      await updateContact(contact.id, { status: "payment_review" });
+      contact.status = "payment_review";
+      const targets = [
+        ...new Set(
+          [config.opsAlertNumber, config.ops.adminNumber, config.ops.supportNumber].filter(
+            (n): n is string => Boolean(n),
+          ),
+        ),
+      ];
+      for (const to of targets) {
         try {
           await sendText(
-            config.opsAlertNumber,
-            `🚨 Handoff needed\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nReason: ${input.reason}`,
+            to,
+            `🚨 Payment dispute\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nReason: ${input.reason}`,
           );
         } catch (err) {
           console.error("Ops alert failed:", err);
         }
       }
-      return "A human team member has been notified and will take over this chat.";
+      return "Payment team has been alerted and will confirm in this chat. Keep helping the customer with everything else — do not go silent.";
     },
   });
 

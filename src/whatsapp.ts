@@ -79,3 +79,30 @@ export async function downloadMedia(mediaId: string): Promise<{ buffer: Buffer; 
   const buffer = Buffer.from(await fileRes.arrayBuffer());
   return { buffer, mimeType: meta.mime_type ?? "image/jpeg" };
 }
+
+/** Upload media bytes to WhatsApp; returns a media id usable in an image message. */
+export async function uploadMedia(buffer: Buffer, mimeType: string): Promise<string> {
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", mimeType);
+  form.append("file", new Blob([new Uint8Array(buffer)], { type: mimeType }), "image");
+  const res = await fetch(`${base()}/${config.whatsapp.phoneNumberId}/media`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.whatsapp.accessToken}` },
+    body: form,
+  });
+  const json: any = await res.json().catch(() => ({}));
+  if (!res.ok || !json.id) throw new Error(`Media upload failed: ${res.status} ${JSON.stringify(json)}`);
+  return json.id;
+}
+
+/** Send an image by media id (e.g. a stored payment screenshot to the team). */
+export async function sendImage(to: string, mediaId: string, caption?: string): Promise<string | null> {
+  const json = await graphPost(`${config.whatsapp.phoneNumberId}/messages`, {
+    messaging_product: "whatsapp",
+    to,
+    type: "image",
+    image: { id: mediaId, ...(caption ? { caption } : {}) },
+  });
+  return json.messages?.[0]?.id ?? null;
+}

@@ -17,7 +17,8 @@ try {
 
 export const pool = new pg.Pool({ connectionString: config.databaseUrl });
 
-export type ContactStatus = "active" | "payment_pending" | "handoff" | "purchased";
+// "handoff" is legacy (retired 2026-08-25) — kept so old rows read cleanly until the boot migration drains them.
+export type ContactStatus = "active" | "payment_pending" | "payment_review" | "purchased" | "handoff";
 
 export interface Contact {
   id: number;
@@ -135,10 +136,12 @@ export async function insertPayment(opts: {
   reference?: string | null;
   verified: boolean;
   detail?: unknown;
+  screenshot?: Buffer | null;
+  screenshotMime?: string | null;
 }): Promise<void> {
   await pool.query(
-    `INSERT INTO payments (contact_id, wa_media_id, amount, reference, verified, detail)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+    `INSERT INTO payments (contact_id, wa_media_id, amount, reference, verified, detail, screenshot, screenshot_mime)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       opts.contactId,
       opts.waMediaId ?? null,
@@ -146,6 +149,8 @@ export async function insertPayment(opts: {
       opts.reference ?? null,
       opts.verified,
       JSON.stringify(opts.detail ?? {}),
+      opts.screenshot ?? null,
+      opts.screenshotMime ?? null,
     ],
   );
 }
@@ -167,4 +172,97 @@ export async function recordCapiEvent(opts: {
 export async function capiEventExists(eventId: string): Promise<boolean> {
   const res = await pool.query(`SELECT 1 FROM capi_events WHERE event_id = $1 AND success LIMIT 1`, [eventId]);
   return (res.rowCount ?? 0) > 0;
+}
+
+// ── Team interface queries (read-only by design) ─────────────
+
+export interface SaleRow {
+  payment_id: number;
+  amount: string | null;
+  reference: string | null;
+  paid_at: Date;
+  name: string | null;
+  wa_id: string;
+  from_ad: boolean;
+  has_screenshot: boolean;
+}
+
+export async function recentSales(days = 7): Promise<SaleRow[]> {
+  const res = await pool.query(
+    `SELECT p.id AS payment_id, p.amount::text AS amount, p.reference, p.created_at AS paid_at,
+            c.name, c.wa_id, (c.ctwa_clid IS NOT NULL) AS from_ad,
+            (p.screenshot IS NOT NULL) AS has_screenshot
+     FROM payments p JOIN contacts c ON c.id = p.contact_id
+     WHERE p.verified AND p.created_at > now() - make_interval(days => $1)
+     ORDER BY p.created_at DESC LIMIT 20`,
+    [days],
+  );
+  return res.rows;
+}
+
+export async function paymentScreenshot(paymentId: number): Promise<{ bytes: Buffer; mime: string } | null> {
+  const res = await pool.query(`SELECT screenshot, screenshot_mime FROM payments WHERE id = $1`, [paymentId]);
+  const row = res.rows[0];
+  if (!row?.screenshot) return null;
+  return { bytes: row.screenshot, mime: row.screenshot_mime ?? "image/jpeg" };
+}
+
+export interface ActionItem {
+  kind: string;
+  name: string | null;
+  wa_id: string;
+  note: string;
+  at: Date | null;
+}
+
+export async function opsActionItems(): Promise<ActionItem[]> {
+  const res = await pool.query(
+    `SELECT 'payment_review' AS kind, c.name, c.wa_id,
+            'Payment team review pending' AS note,
+            (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) AS at
+     FROM contacts c WHERE c.status = 'payment_review'
+     UNION ALL
+     SELECT 'stalled_checkout', c.name, c.wa_id,
+            'Bank details mile, screenshot nahi aya',
+            (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
+     FROM contacts c
+     WHERE c.status = 'payment_pending'
+       AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) < now() - interval '2 hours'
+     UNION ALL
+     SELECT 'hot_lead_silent', c.name, c.wa_id,
+            'Qualified lead, 6+ ghante se silent',
+            (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
+     FROM contacts c
+     WHERE c.status = 'active' AND c.qualified
+       AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) < now() - interval '6 hours'
+     ORDER BY at DESC NULLS LAST LIMIT 25`,
+  );
+  return res.rows;
+}
+
+export interface FunnelSummary {
+  contacts: number;
+  from_ads: number;
+  qualified: number;
+  payment_pending: number;
+  purchases: number;
+  revenue: string | null;
+  sales_today: number;
+  revenue_today: string | null;
+}
+
+export async function funnelSummary(): Promise<FunnelSummary> {
+  const res = await pool.query(
+    `SELECT (SELECT count(*)::int FROM contacts) AS contacts,
+            (SELECT count(*)::int FROM contacts WHERE ctwa_clid IS NOT NULL) AS from_ads,
+            (SELECT count(*)::int FROM contacts WHERE qualified) AS qualified,
+            (SELECT count(*)::int FROM contacts WHERE status = 'payment_pending') AS payment_pending,
+            (SELECT count(*)::int FROM payments WHERE verified) AS purchases,
+            (SELECT sum(amount)::text FROM payments WHERE verified) AS revenue,
+            (SELECT count(*)::int FROM payments WHERE verified
+              AND created_at > (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi')) AS sales_today,
+            (SELECT sum(amount)::text FROM payments WHERE verified
+              AND created_at > (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi')) AS revenue_today`,
+  );
+  return res.rows[0];
 }
