@@ -218,19 +218,19 @@ export interface ActionItem {
 export async function opsActionItems(): Promise<ActionItem[]> {
   const res = await pool.query(
     `SELECT 'payment_review' AS kind, c.name, c.wa_id,
-            'Payment team review pending' AS note,
+            'Payment review pending' AS note,
             (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) AS at
      FROM contacts c WHERE c.status = 'payment_review'
      UNION ALL
      SELECT 'stalled_checkout', c.name, c.wa_id,
-            'Bank details mile, screenshot nahi aya',
+            'Got bank details, no screenshot yet',
             (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
      FROM contacts c
      WHERE c.status = 'payment_pending'
        AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) < now() - interval '2 hours'
      UNION ALL
      SELECT 'hot_lead_silent', c.name, c.wa_id,
-            'Qualified lead, 6+ ghante se silent',
+            'Qualified lead, silent 6+ hours',
             (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
      FROM contacts c
      WHERE c.status = 'active' AND c.qualified

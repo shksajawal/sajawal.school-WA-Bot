@@ -59,7 +59,7 @@ function buildTools(contact: Contact) {
         eventId: `initiatecheckout:${contact.id}`,
       });
       await pingTeam(
-        `🛒 Checkout shuru — Rs ${input.expected_amount_pkr.toLocaleString()} (${input.program})\n${contact.name ?? "?"} (wa.me/${contact.wa_id}) — bank details bheje gaye`,
+        `🛒 Checkout started — Rs ${input.expected_amount_pkr.toLocaleString()} (${input.program})\n${contact.name ?? "?"} (wa.me/${contact.wa_id}) — bank details sent`,
       );
       return `Bank details to include in your reply:\n${config.payment.bankDetails}`;
     },

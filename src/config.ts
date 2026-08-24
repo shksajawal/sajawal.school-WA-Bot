@@ -51,6 +51,9 @@ export const config = {
 
   payment: {
     bankDetails: required("BANK_DETAILS").replace(/\\n/g, "\n"),
+    // A screenshot within this % of any valid amount still verifies — people
+    // send slightly more or less (fees, rounding) and shouldn't be bounced.
+    amountTolerancePct: Number(optional("PAYMENT_TOLERANCE_PCT") ?? 20),
     validAmounts: (optional("VALID_AMOUNTS") ?? "3900,8700")
       .split(",")
       .map((s) => Number(s.trim()))

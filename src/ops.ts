@@ -60,7 +60,7 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
   } catch (err) {
     console.error("Ops reply failed:", err);
     try {
-      await sendText(from, "Report banate hue error aya — thori dair mein dubara try karein.");
+      await sendText(from, "Something went wrong building the report — try again in a minute.");
     } catch {
       /* window closed or send failed — nothing else to do */
     }
@@ -70,7 +70,7 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
 async function replySales(to: string): Promise<void> {
   const sales = await recentSales(7);
   if (!sales.length) {
-    await sendText(to, "Pichle 7 din mein koi verified sale nahi.");
+    await sendText(to, "No verified sales in the last 7 days.");
     return;
   }
   const total = sales.reduce((s, r) => s + Number(r.amount ?? 0), 0);
@@ -78,7 +78,7 @@ async function replySales(to: string): Promise<void> {
     (r, i) =>
       `${i + 1}. Rs ${Number(r.amount ?? 0).toLocaleString()} — ref ${r.reference ?? "?"} — ${r.name ?? "?"}\n   ${fmtPKT(r.paid_at)} · ${r.from_ad ? "ad" : "organic"} · wa.me/${r.wa_id}`,
   );
-  await sendText(to, `💰 Sales (7 din) — ${sales.length} sale, Rs ${total.toLocaleString()}\n\n${lines.join("\n")}\n\nScreenshots aa rahe hain…`);
+  await sendText(to, `💰 Sales (last 7 days) — ${sales.length} sales, Rs ${total.toLocaleString()}\n\n${lines.join("\n")}\n\nSending screenshots…`);
   let sent = 0;
   for (const r of sales) {
     if (sent >= 5 || !r.has_screenshot) continue;
@@ -92,14 +92,14 @@ async function replySales(to: string): Promise<void> {
       console.error("Screenshot send failed:", err);
     }
   }
-  if (sent === 0) await sendText(to, "In sales ke screenshots store mein nahi hain (purani sales, persistence se pehle ki).");
+  if (sent === 0) await sendText(to, "No stored screenshots for these sales (they predate screenshot persistence).");
 }
 
 async function replyLeads(to: string): Promise<void> {
   const items = await opsActionItems();
   const queries = await openSupportQueries();
   if (!items.length && !queries.length) {
-    await sendText(to, "Abhi koi pending action nahi. Sab clear. ✅");
+    await sendText(to, "No pending actions. All clear. ✅");
     return;
   }
   const queryLines = queries.map(
@@ -107,7 +107,7 @@ async function replyLeads(to: string): Promise<void> {
   );
   const label: Record<string, string> = {
     payment_review: "🔴 PAYMENT REVIEW",
-    stalled_checkout: "🟠 CHECKOUT ADHURA",
+    stalled_checkout: "🟠 CHECKOUT INCOMPLETE",
     hot_lead_silent: "🟡 HOT LEAD SILENT",
   };
   const lines = items.map(
@@ -122,13 +122,13 @@ async function replyDigest(to: string): Promise<void> {
   const items = await opsActionItems();
   await sendText(
     to,
-    `📊 Sajawal.School bot\n\nAaj: ${f.sales_today} sale${f.sales_today === 1 ? "" : "s"}, Rs ${Number(f.revenue_today ?? 0).toLocaleString()}\nTotal: ${f.purchases} sales, Rs ${Number(f.revenue ?? 0).toLocaleString()}\n\nContacts ${f.contacts} (ads se ${f.from_ads}) · qualified ${f.qualified} · checkout pe ${f.payment_pending}\nPending actions: ${items.length}\n\nCommands: "sales" · "leads" · "help"`,
+    `📊 Sajawal.School bot\n\nToday: ${f.sales_today} sale${f.sales_today === 1 ? "" : "s"}, Rs ${Number(f.revenue_today ?? 0).toLocaleString()}\nAll-time: ${f.purchases} sales, Rs ${Number(f.revenue ?? 0).toLocaleString()}\n\nContacts ${f.contacts} (${f.from_ads} from ads) · qualified ${f.qualified} · at checkout ${f.payment_pending}\nPending actions: ${items.length}\n\nCommands: "sales" · "leads" · "help"`,
   );
 }
 
 async function replyHelp(to: string): Promise<void> {
   await sendText(
     to,
-    `Commands:\n\n"sales" — pichle 7 din ki verified sales, screenshots ke sath\n"leads" — jin logon pe action chahiye (payment review, adhura checkout, silent hot leads)\nkuch bhi aur — aaj ka summary\n\nYe interface sirf dekh sakta hai — koi record change/delete nahi hota.`,
+    `Commands:\n\n"sales" — verified sales from the last 7 days, with screenshots\n"leads" — everyone needing action (payment reviews, incomplete checkouts, silent hot leads)\nanything else — today` + "\u2019" + `s summary\n\nThis interface is read-only — nothing can be changed or deleted from here.`,
   );
 }

@@ -141,8 +141,7 @@ async function visionCheck(image: Buffer, mimeType: string): Promise<PaymentChec
     };
   }
 
-  const amountOk =
-    parsed.amount_pkr !== null && config.payment.validAmounts.includes(parsed.amount_pkr);
+  const amountOk = amountWithinTolerance(parsed.amount_pkr);
   const recipient = recipientCheck(parsed.recipient_name, parsed.recipient_number);
   const isPayment = parsed.is_payment_screenshot;
 
@@ -186,11 +185,22 @@ async function visionCheck(image: Buffer, mimeType: string): Promise<PaymentChec
  * fallback/second layer. Amount validity is enforced here; reference-reuse is
  * enforced by the caller against the payments table.
  */
+/**
+ * True when the paid amount lands within the configured tolerance of ANY
+ * valid amount. Rs 3,750 against a Rs 3,900 plan is a sale, not a rejection.
+ */
+function amountWithinTolerance(amount: number | null): boolean {
+  if (amount === null || amount <= 0) return false;
+  const pct = config.payment.amountTolerancePct / 100;
+  return config.payment.validAmounts.some(
+    (valid) => Math.abs(amount - valid) <= valid * pct,
+  );
+}
+
 export async function verifyPaymentScreenshot(image: Buffer, mimeType: string): Promise<PaymentCheck> {
   const ocr = await ocrServiceCheck(image, mimeType);
   if (ocr?.verified) {
-    const amountOk = ocr.amount !== null && config.payment.validAmounts.includes(ocr.amount);
-    if (amountOk) return ocr;
+    if (amountWithinTolerance(ocr.amount)) return ocr;
     return { ...ocr, verified: false, reason: `ocr_amount_invalid: ${ocr.amount}` };
   }
   return visionCheck(image, mimeType);
