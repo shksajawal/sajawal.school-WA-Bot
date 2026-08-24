@@ -46,6 +46,10 @@ interface WebhookValue {
 }
 
 async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Promise<void> {
+  // The ops number messages this line to keep its 24h window open — never treat
+  // the operator as a customer and never try to sell to them.
+  if (config.opsAlertNumber && m.from === config.opsAlertNumber) return;
+
   const profileName = value.contacts?.find((c) => c.wa_id === m.from)?.profile?.name ?? null;
 
   const contact = await upsertContact({
