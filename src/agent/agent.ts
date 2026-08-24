@@ -6,6 +6,7 @@ import { sendCapiEvent } from "../capi.js";
 import { insertSupportQuery, type Contact, type StoredMessage, updateContact } from "../db.js";
 import { sendText } from "../whatsapp.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
+import { pingTeam } from "../ops.js";
 
 const client = new Anthropic();
 
@@ -29,11 +30,14 @@ function buildTools(contact: Contact) {
     inputSchema: z.object({
       reason: z.string().describe("One sentence: why this person qualifies"),
     }),
-    run: async () => {
+    run: async (input) => {
       if (contact.qualified) return "Already recorded for this customer.";
       await updateContact(contact.id, { qualified: true });
       contact.qualified = true;
       await sendCapiEvent(contact, "QualifiedLead");
+      await pingTeam(
+        `🟢 Qualified lead — ${contact.name ?? "?"} (wa.me/${contact.wa_id})\n${input.reason}`,
+      );
       return "Qualified lead recorded.";
     },
   });
@@ -55,6 +59,9 @@ function buildTools(contact: Contact) {
         value: input.expected_amount_pkr,
         eventId: `initiatecheckout:${contact.id}`,
       });
+      await pingTeam(
+        `🛒 Checkout shuru — Rs ${input.expected_amount_pkr.toLocaleString()} (${input.program})\n${contact.name ?? "?"} (wa.me/${contact.wa_id}) — bank details bheje gaye`,
+      );
       return `Bank details to include in your reply:\n${config.payment.bankDetails}`;
     },
   });
@@ -69,23 +76,9 @@ function buildTools(contact: Contact) {
     run: async (input) => {
       await updateContact(contact.id, { status: "payment_review" });
       contact.status = "payment_review";
-      const targets = [
-        ...new Set(
-          [config.opsAlertNumber, config.ops.adminNumber, config.ops.supportNumber].filter(
-            (n): n is string => Boolean(n),
-          ),
-        ),
-      ];
-      for (const to of targets) {
-        try {
-          await sendText(
-            to,
-            `🚨 Payment dispute\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nReason: ${input.reason}`,
-          );
-        } catch (err) {
-          console.error("Ops alert failed:", err);
-        }
-      }
+      await pingTeam(
+        `🚨 Payment dispute\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nReason: ${input.reason}`,
+      );
       return "Payment team has been alerted and will confirm in this chat. Keep helping the customer with everything else — do not go silent.";
     },
   });
@@ -99,23 +92,9 @@ function buildTools(contact: Contact) {
     }),
     run: async (input) => {
       await insertSupportQuery(contact.id, input.summary);
-      const targets = [
-        ...new Set(
-          [config.ops.supportNumber, config.ops.adminNumber].filter(
-            (n): n is string => Boolean(n),
-          ),
-        ),
-      ];
-      for (const to of targets) {
-        try {
-          await sendText(
-            to,
-            `📨 Support query\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nIssue: ${input.summary}`,
-          );
-        } catch (err) {
-          console.error("Support forward ping failed (query is still in the leads report):", err);
-        }
-      }
+      await pingTeam(
+        `📨 Support query\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nIssue: ${input.summary}`,
+      );
       return "Forwarded to the human support team — they have the summary and the customer's contact. Tell the customer it's been forwarded and they'll be contacted shortly, and that you're here for any other questions meanwhile.";
     },
   });

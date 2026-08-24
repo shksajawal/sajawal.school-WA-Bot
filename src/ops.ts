@@ -22,6 +22,28 @@ const fmtPKT = (d: Date | string | null): string =>
       })
     : "?";
 
+/**
+ * Brief real-time ping to every team number. Fire-and-forget: if a number's
+ * 24h window is closed the send just fails — the "leads" report is the backstop,
+ * and any team message to the bot reopens their window.
+ */
+export async function pingTeam(note: string): Promise<void> {
+  const targets = [
+    ...new Set(
+      [config.ops.supportNumber, config.ops.adminNumber, config.opsAlertNumber].filter(
+        (n): n is string => Boolean(n),
+      ),
+    ),
+  ];
+  for (const to of targets) {
+    try {
+      await sendText(to, note);
+    } catch (err) {
+      console.error("Team ping failed (window likely closed):", err);
+    }
+  }
+}
+
 export function isOpsNumber(from: string): boolean {
   return [config.ops.adminNumber, config.ops.supportNumber, config.opsAlertNumber]
     .filter((n): n is string => Boolean(n))

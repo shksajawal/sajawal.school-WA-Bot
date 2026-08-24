@@ -21,7 +21,7 @@ import {
 import { downloadMedia, markReadWithTyping, sendText } from "../whatsapp.js";
 import { sendCapiEvent } from "../capi.js";
 import { verifyPaymentScreenshot } from "../payments.js";
-import { handleOpsMessage, isOpsNumber } from "../ops.js";
+import { handleOpsMessage, isOpsNumber, pingTeam } from "../ops.js";
 import { generateReply } from "../agent/agent.js";
 
 interface WebhookMessage {
@@ -194,20 +194,7 @@ async function sendBotText(contact: Contact, text: string): Promise<void> {
 }
 
 async function alertOps(contact: Contact, note: string): Promise<void> {
-  const targets = [
-    ...new Set(
-      [config.opsAlertNumber, config.ops.adminNumber, config.ops.supportNumber].filter(
-        (n): n is string => Boolean(n),
-      ),
-    ),
-  ];
-  for (const to of targets) {
-    try {
-      await sendText(to, `${note}\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})`);
-    } catch (err) {
-      console.error("Ops alert failed:", err);
-    }
-  }
+  await pingTeam(`${note}\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})`);
 }
 
 export function startInboundWorker(): Worker {
