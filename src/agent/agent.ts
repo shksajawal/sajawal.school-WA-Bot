@@ -4,7 +4,6 @@ import { z } from "zod";
 import { config } from "../config.js";
 import { sendCapiEvent } from "../capi.js";
 import { insertSupportQuery, type Contact, type StoredMessage, updateContact } from "../db.js";
-import { sendText } from "../whatsapp.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { pingTeam } from "../ops.js";
 
