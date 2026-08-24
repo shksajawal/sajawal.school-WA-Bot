@@ -33,7 +33,7 @@ function buildTools(contact: Contact) {
       if (contact.qualified) return "Already recorded for this customer.";
       await updateContact(contact.id, { qualified: true });
       contact.qualified = true;
-      await sendCapiEvent(contact, "QualifiedLead");
+      await sendCapiEvent(contact, "Lead");
       await pingTeam(
         `🟢 Qualified lead — ${contact.name ?? "?"} (wa.me/${contact.wa_id})\n${input.reason}`,
       );
@@ -73,8 +73,13 @@ function buildTools(contact: Contact) {
       reason: z.string().describe("One sentence: why this needs a human"),
     }),
     run: async (input) => {
-      await updateContact(contact.id, { status: "payment_review" });
-      contact.status = "payment_review";
+      try {
+        await updateContact(contact.id, { status: "payment_review" });
+        contact.status = "payment_review";
+      } catch (err) {
+        // A DB hiccup must never kill the customer's reply mid-conversation
+        console.error("payment_review status update failed:", err);
+      }
       await pingTeam(
         `🚨 Payment dispute\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nReason: ${input.reason}`,
       );
@@ -90,7 +95,12 @@ function buildTools(contact: Contact) {
       summary: z.string().describe("One line: the customer's issue, specific enough for support to act without reading the chat"),
     }),
     run: async (input) => {
-      await insertSupportQuery(contact.id, input.summary);
+      try {
+        await insertSupportQuery(contact.id, input.summary);
+      } catch (err) {
+        // Queue insert failing must not break the reply — the ping still goes out
+        console.error("support_queue insert failed:", err);
+      }
       await pingTeam(
         `📨 Support query\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nIssue: ${input.summary}`,
       );

@@ -6,7 +6,10 @@ function sha256(value: string): string {
   return createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
 }
 
-export type CapiEventName = "LeadSubmitted" | "QualifiedLead" | "InitiateCheckout" | "Purchase";
+// Standard Meta event names only — custom names never appear in Ads Manager's
+// optimization dropdown. Contact = first ad-attributed message, Lead = real
+// buying intent, then InitiateCheckout and Purchase.
+export type CapiEventName = "Contact" | "Lead" | "InitiateCheckout" | "Purchase";
 
 /**
  * Send a Conversions API event with action_source=business_messaging.
@@ -27,7 +30,7 @@ export async function sendCapiEvent(
   if (!contact.ctwa_clid) return false;
 
   try {
-    // Idempotency: one success per event_id (e.g. one QualifiedLead per contact)
+    // Idempotency: one success per event_id (e.g. one Lead per contact)
     if (await capiEventExists(eventId)) return true;
 
     const body: any = {
