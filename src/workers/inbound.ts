@@ -83,9 +83,10 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
   await updateContact(contact.id, { last_user_msg_at: new Date(), followup_count: 0 });
   await markReadWithTyping(m.id);
 
-  // First message from an ad click → standard Contact event seeds the dataset
+  // First message from an ad click → LeadSubmitted seeds the dataset (the
+  // messaging channel's own event name — see the note in capi.ts)
   if (m.referral?.ctwa_clid) {
-    await sendCapiEvent(contact, "Contact", { eventId: `contact:${contact.id}` });
+    await sendCapiEvent(contact, "LeadSubmitted", { eventId: `leadsubmitted:${contact.id}` });
   }
 
   // Handoff-mute retired 2026-08-25: support lives on its own WhatsApp line and

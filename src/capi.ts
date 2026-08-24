@@ -6,10 +6,11 @@ function sha256(value: string): string {
   return createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
 }
 
-// Standard Meta event names only — custom names never appear in Ads Manager's
-// optimization dropdown. Contact = first ad-attributed message, Lead = real
-// buying intent, then InitiateCheckout and Purchase.
-export type CapiEventName = "Contact" | "Lead" | "InitiateCheckout" | "Purchase";
+// business_messaging has its OWN event vocabulary — probed live 2026-08-25:
+// LeadSubmitted / QualifiedLead / InitiateCheckout / Purchase are ACCEPTED;
+// web-standard names ("Contact", "Lead", "CompleteRegistration") are REJECTED
+// with subcode 2804066. Do not "fix" these to web standard names again.
+export type CapiEventName = "LeadSubmitted" | "QualifiedLead" | "InitiateCheckout" | "Purchase";
 
 /**
  * Send a Conversions API event with action_source=business_messaging.

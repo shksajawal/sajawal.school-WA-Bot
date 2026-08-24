@@ -33,7 +33,7 @@ function buildTools(contact: Contact) {
       if (contact.qualified) return "Already recorded for this customer.";
       await updateContact(contact.id, { qualified: true });
       contact.qualified = true;
-      await sendCapiEvent(contact, "Lead");
+      await sendCapiEvent(contact, "QualifiedLead");
       await pingTeam(
         `🟢 Qualified lead — ${contact.name ?? "?"} (wa.me/${contact.wa_id})\n${input.reason}`,
       );
