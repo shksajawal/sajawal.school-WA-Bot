@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import { sendImage, sendText, uploadMedia } from "./whatsapp.js";
-import { funnelSummary, opsActionItems, paymentScreenshot, recentSales } from "./db.js";
+import { funnelSummary, openSupportQueries, opsActionItems, paymentScreenshot, recentSales } from "./db.js";
 
 /**
  * Read-only WhatsApp interface for the team. Admin and support numbers text the
@@ -75,10 +75,14 @@ async function replySales(to: string): Promise<void> {
 
 async function replyLeads(to: string): Promise<void> {
   const items = await opsActionItems();
-  if (!items.length) {
+  const queries = await openSupportQueries();
+  if (!items.length && !queries.length) {
     await sendText(to, "Abhi koi pending action nahi. Sab clear. ✅");
     return;
   }
+  const queryLines = queries.map(
+    (q) => `🔵 SUPPORT QUERY — ${q.name ?? "?"}\n${q.summary} · ${fmtPKT(q.created_at)}\n→ wa.me/${q.wa_id}`,
+  );
   const label: Record<string, string> = {
     payment_review: "🔴 PAYMENT REVIEW",
     stalled_checkout: "🟠 CHECKOUT ADHURA",
@@ -87,7 +91,8 @@ async function replyLeads(to: string): Promise<void> {
   const lines = items.map(
     (r) => `${label[r.kind] ?? r.kind} — ${r.name ?? "?"}\n${r.note} · last msg ${fmtPKT(r.at)}\n→ wa.me/${r.wa_id}`,
   );
-  await sendText(to, `📋 Action list (${items.length})\n\n${lines.join("\n\n")}`);
+  const all = [...queryLines, ...lines];
+  await sendText(to, `📋 Action list (${all.length})\n\n${all.join("\n\n")}`);
 }
 
 async function replyDigest(to: string): Promise<void> {

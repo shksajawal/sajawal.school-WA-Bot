@@ -266,3 +266,24 @@ export async function funnelSummary(): Promise<FunnelSummary> {
   );
   return res.rows[0];
 }
+
+export async function insertSupportQuery(contactId: number, summary: string): Promise<void> {
+  await pool.query(`INSERT INTO support_queue (contact_id, summary) VALUES ($1, $2)`, [contactId, summary]);
+}
+
+export interface SupportQueryRow {
+  name: string | null;
+  wa_id: string;
+  summary: string;
+  created_at: Date;
+}
+
+export async function openSupportQueries(): Promise<SupportQueryRow[]> {
+  const res = await pool.query(
+    `SELECT c.name, c.wa_id, q.summary, q.created_at
+     FROM support_queue q JOIN contacts c ON c.id = q.contact_id
+     WHERE q.created_at > now() - interval '48 hours'
+     ORDER BY q.created_at DESC LIMIT 20`,
+  );
+  return res.rows;
+}

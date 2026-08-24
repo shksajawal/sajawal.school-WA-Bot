@@ -3,7 +3,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { config } from "../config.js";
 import { sendCapiEvent } from "../capi.js";
-import { type Contact, type StoredMessage, updateContact } from "../db.js";
+import { insertSupportQuery, type Contact, type StoredMessage, updateContact } from "../db.js";
 import { sendText } from "../whatsapp.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 
@@ -90,7 +90,37 @@ function buildTools(contact: Contact) {
     },
   });
 
-  return [recordQualifiedLead, sendPaymentDetails, requestHumanHandoff];
+  const notifySupport = betaZodTool({
+    name: "notify_support",
+    description:
+      "Forward a support issue (access, classroom, community, account — anything the knowledge base can't solve) to the human support team. They get the summary + customer link instantly, and the query lands on the team's action list. Use once per issue, then tell the customer it's forwarded and keep answering their other questions.",
+    inputSchema: z.object({
+      summary: z.string().describe("One line: the customer's issue, specific enough for support to act without reading the chat"),
+    }),
+    run: async (input) => {
+      await insertSupportQuery(contact.id, input.summary);
+      const targets = [
+        ...new Set(
+          [config.ops.supportNumber, config.ops.adminNumber].filter(
+            (n): n is string => Boolean(n),
+          ),
+        ),
+      ];
+      for (const to of targets) {
+        try {
+          await sendText(
+            to,
+            `📨 Support query\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nIssue: ${input.summary}`,
+          );
+        } catch (err) {
+          console.error("Support forward ping failed (query is still in the leads report):", err);
+        }
+      }
+      return "Forwarded to the human support team — they have the summary and the customer's contact. Tell the customer it's been forwarded and they'll be contacted shortly, and that you're here for any other questions meanwhile.";
+    },
+  });
+
+  return [recordQualifiedLead, sendPaymentDetails, requestHumanHandoff, notifySupport];
 }
 
 /**

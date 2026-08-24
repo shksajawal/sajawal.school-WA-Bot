@@ -58,3 +58,13 @@ UPDATE contacts SET status = CASE
   WHEN EXISTS (SELECT 1 FROM payments p WHERE p.contact_id = contacts.id AND p.verified)
   THEN 'purchased' ELSE 'active' END
 WHERE status = 'handoff';
+
+-- Queries the bot forwarded to the human support line. Read by the team's
+-- "leads" report so a missed ping never orphans a customer. No done-flag by
+-- design (the ops interface is read-only); entries age out of reports at 48h.
+CREATE TABLE IF NOT EXISTS support_queue (
+  id SERIAL PRIMARY KEY,
+  contact_id INT NOT NULL REFERENCES contacts(id),
+  summary TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
