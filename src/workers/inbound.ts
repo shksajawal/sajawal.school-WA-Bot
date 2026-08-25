@@ -99,16 +99,7 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
   }
 
   if (m.type === "text") {
-    if (await isPrefilledOpener(contact.id, m.text?.body ?? "")) {
-      // Meta's auto-filled CTA text — zero-signal, identical every time, and
-      // 71% of ad leads on day one. A scripted reply (the human team's proven
-      // opener) costs no tokens and out-performs a generated info-dump.
-      await sendBotText(
-        contact,
-        "Wslam! 🙂 Are you a complete beginner, or do you already have some experience with digital marketing?",
-      );
-      return;
-    }
+    if (await runDrip(contact, m.text?.body ?? "")) return;
     await enqueueReply({ contactId: contact.id, afterMessageId: dbMsgId });
   } else if (m.type === "reaction" || m.type === "sticker") {
     // A 👍 or sticker is a gesture, not a question. Replying "file type not
@@ -212,17 +203,40 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
   }
 }
 
-const PREFILLED_OPENERS = new Set([
-  "hello! can i get more info on this?",
-  "hi! can i get more info on this?",
-  "hello! i'm interested. can you tell me more?",
-]);
+/**
+ * Deterministic opening drip — the human support team's proven script, mined
+ * from their exported chats, played back verbatim at zero model cost. Any real
+ * question (a "?" or a long message) exits to Claude permanently; the script
+ * only ever advances on short low-signal replies, which is what most early
+ * messages are. Claude therefore spends tokens only where a sale is actually
+ * being reasoned about.
+ */
+const DRIP_LINES: Record<number, string> = {
+  0: "Wslam! 🙂 Are you a complete beginner, or do you already have some experience with digital marketing?",
+  1: "Great. If you are starting from zero there is no issue at all. I will guide you in the right direction first.\n\nJust tell me one thing. How much time can you give daily. 1 hour. 2 hours. Or more than that?",
+  2: "Perfect. Every single person who is earning online today started without knowing anything as well.\n\nThe mistake most people make is they spend months learning random stuff and then wonder why no money is coming in.\n\nWhat usually works better is learning one skill first and then learning how to actually get clients for it. Because knowing something and getting paid for it are two different things.\n\nThat's exactly why we built the program. Everything is in one place so you don't have to figure out what to learn next.\n\nIf you want the details, just reply with the word \"details\" and I'll share everything with you. No pressure.",
+};
 
-/** True when this is the contact's FIRST message and it is Meta's pre-filled CTA text. */
-async function isPrefilledOpener(contactId: number, body: string): Promise<boolean> {
-  if (!PREFILLED_OPENERS.has(body.trim().toLowerCase())) return false;
-  const recent = await getRecentMessages(contactId, 5);
-  return recent.filter((r) => r.direction === "in").length === 1;
+async function runDrip(contact: Contact, body: string): Promise<boolean> {
+  if (contact.drip_step < 0 || contact.drip_step > 2) return false;
+  const text = body.trim();
+  // Real engagement exits the script: questions, long messages, or anything
+  // about price/payment goes straight to Claude with full history.
+  const exits =
+    text.includes("?") ||
+    text.length > 70 ||
+    /price|fee|fees|rate|charge|kitn|paise|pais|rupee|rs\b|discount|payment|pay\b|refund/i.test(text);
+  if (exits && !(contact.drip_step === 0 && /can i get more info|interested/i.test(text))) {
+    await updateContact(contact.id, { drip_step: -1 });
+    contact.drip_step = -1;
+    return false;
+  }
+  const line = DRIP_LINES[contact.drip_step];
+  const next = contact.drip_step + 1;
+  await updateContact(contact.id, { drip_step: next > 2 ? -1 : next });
+  contact.drip_step = next > 2 ? -1 : next;
+  await sendBotText(contact, line);
+  return true;
 }
 
 async function sendBotText(contact: Contact, text: string): Promise<void> {

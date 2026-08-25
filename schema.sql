@@ -68,3 +68,10 @@ CREATE TABLE IF NOT EXISTS support_queue (
   summary TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Deterministic opening drip (mined from the human team's proven script).
+-- 0..3 = scripted stage; -1 = handed to Claude (any real question exits the script).
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS drip_step INT NOT NULL DEFAULT 0;
+-- Existing conversations predate the drip — Claude keeps owning them.
+UPDATE contacts SET drip_step = -1 WHERE drip_step = 0 AND EXISTS
+  (SELECT 1 FROM messages m WHERE m.contact_id = contacts.id AND m.direction = 'out');

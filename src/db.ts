@@ -31,6 +31,7 @@ export interface Contact {
   qualified: boolean;
   followup_count: number;
   last_user_msg_at: Date | null;
+  drip_step: number;
 }
 
 export interface StoredMessage {
@@ -76,7 +77,7 @@ export async function getContact(id: number): Promise<Contact | null> {
 
 export async function updateContact(
   id: number,
-  fields: Partial<Pick<Contact, "status" | "qualified" | "followup_count" | "last_user_msg_at" | "name">>,
+  fields: Partial<Pick<Contact, "status" | "qualified" | "followup_count" | "last_user_msg_at" | "name" | "drip_step">>,
 ): Promise<void> {
   const keys = Object.keys(fields);
   if (keys.length === 0) return;

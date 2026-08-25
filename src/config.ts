@@ -41,10 +41,12 @@ export const config = {
   },
 
   anthropic: {
-    model: optional("CLAUDE_MODEL") ?? "claude-opus-5",
+    // Haiku by default: the opening is scripted, the knowledge base answers the
+    // FAQs, and transcripts show these chats don't need frontier reasoning.
+    model: optional("CLAUDE_MODEL") ?? "claude-haiku-4-5",
     // Screenshot verification is fraud-sensitive and low-volume — it can run a
     // stronger model than chat without moving the bill.
-    visionModel: optional("CLAUDE_VISION_MODEL") ?? optional("CLAUDE_MODEL") ?? "claude-opus-5",
+    visionModel: optional("CLAUDE_VISION_MODEL") ?? "claude-sonnet-5",
   },
 
   ocr: {
