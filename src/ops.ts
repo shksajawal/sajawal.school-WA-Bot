@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import { sendImage, sendText, uploadMedia } from "./whatsapp.js";
-import { funnelSummary, openSupportQueries, opsActionItems, paymentScreenshot, recentSales } from "./db.js";
+import { contactByWaId, funnelSummary, getRecentMessages, openSupportQueries, opsActionItems, paymentScreenshot, recentSales } from "./db.js";
 
 /**
  * Read-only WhatsApp interface for the team. Admin and support numbers text the
@@ -53,7 +53,10 @@ export function isOpsNumber(from: string): boolean {
 export async function handleOpsMessage(from: string, text: string): Promise<void> {
   const t = text.trim().toLowerCase();
   try {
-    if (/sale|sold|revenue|payment|paisa/.test(t)) await replySales(from);
+    const num = t.replace(/[^0-9]/g, "");
+    if (/chat|history|transcript/.test(t) && num.length >= 10) await replyChat(from, num);
+    else if (num.length >= 11 && num.length <= 15 && /^\d+$/.test(t.replace(/[\s+-]/g, ""))) await replyChat(from, num);
+    else if (/sale|sold|revenue|payment|paisa/.test(t)) await replySales(from);
     else if (/lead|pending|action|follow|kaam/.test(t)) await replyLeads(from);
     else if (/help|command|option/.test(t)) await replyHelp(from);
     else await replyDigest(from);
@@ -65,6 +68,25 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
       /* window closed or send failed — nothing else to do */
     }
   }
+}
+
+/** "chat 92300xxxxxxx" (or just the number) — the recent transcript, so a
+ * handover ping can be followed by reading the actual conversation. */
+async function replyChat(to: string, digits: string): Promise<void> {
+  const waId = digits.startsWith("0") ? "92" + digits.slice(1) : digits;
+  const contact = await contactByWaId(waId);
+  if (!contact) {
+    await sendText(to, `No conversation found for ${waId}.`);
+    return;
+  }
+  const history = await getRecentMessages(contact.id, 20);
+  const lines = history.map(
+    (m) => `${m.direction === "in" ? "👤" : "🤖"} ${(m.body ?? "").slice(0, 160)}`,
+  );
+  await sendText(
+    to,
+    `💬 ${contact.name ?? "?"} (wa.me/${contact.wa_id}) — ${contact.status}${contact.email ? ` — ${contact.email}` : ""}\n\n${lines.join("\n")}`,
+  );
 }
 
 async function replySales(to: string): Promise<void> {
@@ -129,6 +151,6 @@ async function replyDigest(to: string): Promise<void> {
 async function replyHelp(to: string): Promise<void> {
   await sendText(
     to,
-    `Commands:\n\n"sales" — verified sales from the last 7 days, with screenshots\n"leads" — everyone needing action (payment reviews, incomplete checkouts, silent hot leads)\nanything else — today` + "\u2019" + `s summary\n\nThis interface is read-only — nothing can be changed or deleted from here.`,
+    `Commands:\n\n"sales" — verified sales from the last 7 days, with screenshots\n"leads" — everyone needing action (payment reviews, incomplete checkouts, silent hot leads)\na phone number — that customer` + "\u2019" + `s recent chat transcript\nanything else — today` + "\u2019" + `s summary\n\nThis interface is read-only — nothing can be changed or deleted from here.`,
   );
 }

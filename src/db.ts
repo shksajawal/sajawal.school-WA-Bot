@@ -290,3 +290,8 @@ export async function openSupportQueries(): Promise<SupportQueryRow[]> {
   );
   return res.rows;
 }
+
+export async function contactByWaId(waId: string): Promise<Contact | null> {
+  const res = await pool.query(`SELECT * FROM contacts WHERE wa_id = $1`, [waId]);
+  return res.rows[0] ?? null;
+}
