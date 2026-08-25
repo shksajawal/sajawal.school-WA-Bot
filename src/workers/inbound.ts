@@ -100,6 +100,9 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
 
   if (m.type === "text") {
     await enqueueReply({ contactId: contact.id, afterMessageId: dbMsgId });
+  } else if (m.type === "reaction" || m.type === "sticker") {
+    // A 👍 or sticker is a gesture, not a question. Replying "file type not
+    // supported" to it is the loudest AI-tell we have — stay silent.
   } else {
     await sendBotText(
       contact,
