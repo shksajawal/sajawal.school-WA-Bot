@@ -151,9 +151,19 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
         value: check.amount,
         eventId: `purchase:${contact.id}:${check.reference ?? mediaId}`,
       });
+      // Post-purchase: the thank-you page carries the onboarding instructions.
+      // Organic buyers get amount+eid so the WEB pixel/gtag Purchase fires when
+      // they open it (partial ad attribution via same-browser cookies). Ad-click
+      // buyers already reported Purchase via messaging CAPI — their link carries
+      // no params, so the page's guards keep it a pure instructions visit
+      // (no double-count).
+      const eid = `purchase:${contact.id}:${check.reference ?? mediaId}`;
+      const thankYouUrl = contact.ctwa_clid
+        ? "https://www.sajawal.school/thank-you"
+        : `https://www.sajawal.school/thank-you?amount=${check.amount}&eid=${encodeURIComponent(eid)}`;
       await sendBotText(
         contact,
-        `Payment verified ✅ Welcome to Sajawal.School! 🎉\n\nAap ki enrollment confirm ho gayi hai — onboarding details aap ko shortly isi chat mein mil jayengi. Koi bhi sawal ho to yahin poochein.`,
+        `Payment verified ✅ Welcome to Sajawal.School! 🎉\n\nAap ki enrollment confirm ho gayi hai. Agla qadam yahan hai — access aur classroom ki poori instructions is page pe hain:\n${thankYouUrl}\n\nKoi bhi sawal ho to yahin poochein.`,
       );
       await alertOps(contact, `✅ Purchase verified: Rs ${check.amount} (ref ${check.reference ?? "n/a"})`);
     } else if (check.suspicious) {
