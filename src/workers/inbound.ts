@@ -22,6 +22,7 @@ import { downloadMedia, markReadWithTyping, sendText } from "../whatsapp.js";
 import { sendCapiEvent } from "../capi.js";
 import { verifyPaymentScreenshot } from "../payments.js";
 import { handleOpsMessage, isOpsNumber, pingTeam } from "../ops.js";
+import { matchFaq } from "../faq.js";
 import { generateReply } from "../agent/agent.js";
 
 interface WebhookMessage {
@@ -112,6 +113,17 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
       return;
     }
     if (await runDrip(contact, m.text?.body ?? "")) return;
+
+    // Known factual question with a fixed answer -> canned reply, no model call.
+    // Skipped once a buyer is at the payment stage, where every message matters.
+    if (contact.status === "active") {
+      const faq = matchFaq(m.text?.body ?? "");
+      if (faq) {
+        await sendBotText(contact, faq.reply);
+        return;
+      }
+    }
+
     await enqueueReply({ contactId: contact.id, afterMessageId: dbMsgId });
   } else if (m.type === "reaction" || m.type === "sticker") {
     // A 👍 or sticker is a gesture, not a question. Replying "file type not
