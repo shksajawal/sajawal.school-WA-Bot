@@ -105,7 +105,7 @@ async function ocrServiceCheck(image: Buffer, mimeType: string): Promise<Payment
 /** Claude vision layer — handles the screenshots OCR chokes on, and flags doctored images. */
 async function visionCheck(image: Buffer, mimeType: string): Promise<PaymentCheck> {
   const response = await client.messages.parse({
-    model: config.anthropic.model,
+    model: config.anthropic.visionModel,
     max_tokens: 2048,
     messages: [
       {

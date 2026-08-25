@@ -102,7 +102,7 @@ export async function insertMessage(opts: {
   return res.rows[0]?.id ?? null;
 }
 
-export async function getRecentMessages(contactId: number, limit = 40): Promise<StoredMessage[]> {
+export async function getRecentMessages(contactId: number, limit = 24): Promise<StoredMessage[]> {
   const res = await pool.query<StoredMessage>(
     `SELECT * FROM (
        SELECT id, contact_id, direction, msg_type, body

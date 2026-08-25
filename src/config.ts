@@ -42,6 +42,9 @@ export const config = {
 
   anthropic: {
     model: optional("CLAUDE_MODEL") ?? "claude-opus-5",
+    // Screenshot verification is fraud-sensitive and low-volume — it can run a
+    // stronger model than chat without moving the bill.
+    visionModel: optional("CLAUDE_VISION_MODEL") ?? optional("CLAUDE_MODEL") ?? "claude-opus-5",
   },
 
   ocr: {

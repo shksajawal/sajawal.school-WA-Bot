@@ -99,6 +99,16 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
   }
 
   if (m.type === "text") {
+    if (await isPrefilledOpener(contact.id, m.text?.body ?? "")) {
+      // Meta's auto-filled CTA text — zero-signal, identical every time, and
+      // 71% of ad leads on day one. A scripted reply (the human team's proven
+      // opener) costs no tokens and out-performs a generated info-dump.
+      await sendBotText(
+        contact,
+        "Wslam! 🙂 Are you a complete beginner, or do you already have some experience with digital marketing?",
+      );
+      return;
+    }
     await enqueueReply({ contactId: contact.id, afterMessageId: dbMsgId });
   } else if (m.type === "reaction" || m.type === "sticker") {
     // A 👍 or sticker is a gesture, not a question. Replying "file type not
@@ -200,6 +210,19 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
     );
     await alertOps(contact, `Payment verification errored — manual check needed: ${String(err)}`);
   }
+}
+
+const PREFILLED_OPENERS = new Set([
+  "hello! can i get more info on this?",
+  "hi! can i get more info on this?",
+  "hello! i'm interested. can you tell me more?",
+]);
+
+/** True when this is the contact's FIRST message and it is Meta's pre-filled CTA text. */
+async function isPrefilledOpener(contactId: number, body: string): Promise<boolean> {
+  if (!PREFILLED_OPENERS.has(body.trim().toLowerCase())) return false;
+  const recent = await getRecentMessages(contactId, 5);
+  return recent.filter((r) => r.direction === "in").length === 1;
 }
 
 async function sendBotText(contact: Contact, text: string): Promise<void> {
