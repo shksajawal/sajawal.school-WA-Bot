@@ -76,7 +76,7 @@ async function replySales(to: string): Promise<void> {
   const total = sales.reduce((s, r) => s + Number(r.amount ?? 0), 0);
   const lines = sales.map(
     (r, i) =>
-      `${i + 1}. Rs ${Number(r.amount ?? 0).toLocaleString()} — ref ${r.reference ?? "?"} — ${r.name ?? "?"}\n   ${fmtPKT(r.paid_at)} · ${r.from_ad ? "ad" : "organic"} · wa.me/${r.wa_id}`,
+      `${i + 1}. ${r.name ?? "?"} — Rs ${Number(r.amount ?? 0).toLocaleString()} (ref ${r.reference ?? "?"})\n   Email: ${r.email ?? "❌ not received yet — ask in chat"}\n   Chat: wa.me/${r.wa_id}\n   ${fmtPKT(r.paid_at)} · ${r.from_ad ? "ad" : "organic"}`,
   );
   await sendText(to, `💰 Sales (last 7 days) — ${sales.length} sales, Rs ${total.toLocaleString()}\n\n${lines.join("\n")}\n\nSending screenshots…`);
   let sent = 0;

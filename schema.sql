@@ -75,3 +75,6 @@ ALTER TABLE contacts ADD COLUMN IF NOT EXISTS drip_step INT NOT NULL DEFAULT 0;
 -- Existing conversations predate the drip — Claude keeps owning them.
 UPDATE contacts SET drip_step = -1 WHERE drip_step = 0 AND EXISTS
   (SELECT 1 FROM messages m WHERE m.contact_id = contacts.id AND m.direction = 'out');
+
+-- Buyer email: required for the Skool login invite; captured in-chat post-purchase.
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS email TEXT;

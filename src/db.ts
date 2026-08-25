@@ -32,6 +32,7 @@ export interface Contact {
   followup_count: number;
   last_user_msg_at: Date | null;
   drip_step: number;
+  email: string | null;
 }
 
 export interface StoredMessage {
@@ -77,7 +78,7 @@ export async function getContact(id: number): Promise<Contact | null> {
 
 export async function updateContact(
   id: number,
-  fields: Partial<Pick<Contact, "status" | "qualified" | "followup_count" | "last_user_msg_at" | "name" | "drip_step">>,
+  fields: Partial<Pick<Contact, "status" | "qualified" | "followup_count" | "last_user_msg_at" | "name" | "drip_step" | "email">>,
 ): Promise<void> {
   const keys = Object.keys(fields);
   if (keys.length === 0) return;
@@ -184,6 +185,7 @@ export interface SaleRow {
   paid_at: Date;
   name: string | null;
   wa_id: string;
+  email: string | null;
   from_ad: boolean;
   has_screenshot: boolean;
 }
@@ -191,7 +193,7 @@ export interface SaleRow {
 export async function recentSales(days = 7): Promise<SaleRow[]> {
   const res = await pool.query(
     `SELECT p.id AS payment_id, p.amount::text AS amount, p.reference, p.created_at AS paid_at,
-            c.name, c.wa_id, (c.ctwa_clid IS NOT NULL) AS from_ad,
+            c.name, c.wa_id, c.email, (c.ctwa_clid IS NOT NULL) AS from_ad,
             (p.screenshot IS NOT NULL) AS has_screenshot
      FROM payments p JOIN contacts c ON c.id = p.contact_id
      WHERE p.verified AND p.created_at > now() - make_interval(days => $1)

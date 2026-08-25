@@ -99,6 +99,18 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
   }
 
   if (m.type === "text") {
+    // Buyers send their email for the Skool invite — capture it directly,
+    // no model call needed, and confirm so they know it registered.
+    const emailMatch =
+      (contact.status === "purchased" || contact.status === "payment_review") && !contact.email
+        ? (m.text?.body ?? "").match(/[\w.+-]+@[\w-]+\.[\w.]{2,}/)
+        : null;
+    if (emailMatch) {
+      await updateContact(contact.id, { email: emailMatch[0].toLowerCase() });
+      await pingTeam(`📧 Buyer email received — ${contact.name ?? "?"} (wa.me/${contact.wa_id}): ${emailMatch[0]}`);
+      await sendBotText(contact, `Email mil gaya ✅ (${emailMatch[0]}) — course ka login isi pe aayega.`);
+      return;
+    }
     if (await runDrip(contact, m.text?.body ?? "")) return;
     await enqueueReply({ contactId: contact.id, afterMessageId: dbMsgId });
   } else if (m.type === "reaction" || m.type === "sticker") {
@@ -167,7 +179,7 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
         : `https://www.sajawal.school/thank-you?amount=${check.amount}&eid=${encodeURIComponent(eid)}`;
       await sendBotText(
         contact,
-        `Payment verified ✅ Welcome to Sajawal.School! 🎉\n\nAap ki enrollment confirm ho gayi hai. Agla qadam yahan hai — access aur classroom ki poori instructions is page pe hain:\n${thankYouUrl}\n\nKoi bhi sawal ho to yahin poochein.`,
+        `Payment verified ✅ Welcome to Sajawal.School! 🎉\n\nAap ki enrollment confirm ho gayi hai. Agla qadam yahan hai — access aur classroom ki poori instructions is page pe hain:\n${thankYouUrl}\n\nAur apna email address yahan bhej dein — course ka login isi pe aayega.`,
       );
       await alertOps(contact, `✅ Purchase verified: Rs ${check.amount} (ref ${check.reference ?? "n/a"})`);
     } else if (check.suspicious) {
