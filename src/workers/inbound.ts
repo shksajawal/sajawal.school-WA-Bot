@@ -237,7 +237,7 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
  */
 const DRIP_LINES: Record<number, string> = {
   0: "Wslam! 🙂 Are you a complete beginner, or do you already have some experience with digital marketing?",
-  1: "Great. If you are starting from zero there is no issue at all. I will guide you in the right direction first.\n\nJust tell me one thing. How much time can you give daily. 1 hour. 2 hours. Or more than that?",
+  1: "Great, that helps. I will guide you in the right direction from where you are.\n\nJust tell me one thing. How much time can you give daily. 1 hour. 2 hours. Or more than that?",
   2: "Perfect. Every single person who is earning online today started without knowing anything as well.\n\nThe mistake most people make is they spend months learning random stuff and then wonder why no money is coming in.\n\nWhat usually works better is learning one skill first and then learning how to actually get clients for it. Because knowing something and getting paid for it are two different things.\n\nThat's exactly why we built the program. Everything is in one place so you don't have to figure out what to learn next.\n\nIf you want the details, just reply with the word \"details\" and I'll share everything with you. No pressure.",
 };
 
@@ -255,7 +255,13 @@ async function runDrip(contact: Contact, body: string): Promise<boolean> {
     contact.drip_step = -1;
     return false;
   }
-  const line = DRIP_LINES[contact.drip_step];
+  let line = DRIP_LINES[contact.drip_step];
+  // Step 1 reassures beginners specifically; saying "starting from zero is no
+  // issue" to someone who just said they have experience reads as not listening.
+  if (contact.drip_step === 1 && /beginner|zero|nothing|naya|new|no experience|bilkul/i.test(text)) {
+    line =
+      "Great. If you are starting from zero there is no issue at all, that is exactly who this is built for. I will guide you in the right direction first.\n\nJust tell me one thing. How much time can you give daily. 1 hour. 2 hours. Or more than that?";
+  }
   const next = contact.drip_step + 1;
   await updateContact(contact.id, { drip_step: next > 2 ? -1 : next });
   contact.drip_step = next > 2 ? -1 : next;
