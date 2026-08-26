@@ -48,9 +48,15 @@ export function startFollowupWorker(): Worker {
           const waMsgId = await sendText(contact.wa_id, nudge);
           await insertMessage({ contactId, waMessageId: waMsgId, direction: "out", body: nudge });
         }
-        // Chain one more nudge only while the free window is still open
+        // Chain at most one more nudge, timed to land ~20h after the customer's
+        // last message — still inside the free window, and far enough apart that
+        // two touches never feel like chasing.
         if (touch < config.followup.maxTouches) {
-          await scheduleFollowup({ contactId, touch: touch + 1, lastUserMsgAt }, DAY_MS);
+          const nextAt = currentLast + 20 * 60 * 60 * 1000;
+          const delay = nextAt - Date.now();
+          if (delay > 30 * 60 * 1000) {
+            await scheduleFollowup({ contactId, touch: touch + 1, lastUserMsgAt }, delay);
+          }
         }
       } else {
         // Past the free window. No template (billed per message). Hand the lead
