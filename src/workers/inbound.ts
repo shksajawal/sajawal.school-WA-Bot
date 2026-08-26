@@ -120,6 +120,7 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
       const faq = matchFaq(m.text?.body ?? "");
       if (faq) {
         await sendBotText(contact, faq.reply);
+        await armFollowup(contact);
         return;
       }
     }
@@ -266,7 +267,25 @@ async function runDrip(contact: Contact, body: string): Promise<boolean> {
   await updateContact(contact.id, { drip_step: next > 2 ? -1 : next });
   contact.drip_step = next > 2 ? -1 : next;
   await sendBotText(contact, line);
+  await armFollowup(contact);
   return true;
+}
+
+/**
+ * Arm the gentle follow-up timer for a non-buyer. Called after scripted drip
+ * and FAQ replies as well as Claude replies — a lead who goes quiet mid-script
+ * used to be forgotten entirely.
+ */
+async function armFollowup(contact: Contact): Promise<void> {
+  if (contact.status === "purchased" || contact.status === "payment_review") return;
+  try {
+    await scheduleFollowup(
+      { contactId: contact.id, touch: 1, lastUserMsgAt: new Date().toISOString() },
+      config.followup.firstDelayMs,
+    );
+  } catch (err) {
+    console.error("Failed to arm follow-up:", err);
+  }
 }
 
 async function sendBotText(contact: Contact, text: string): Promise<void> {
