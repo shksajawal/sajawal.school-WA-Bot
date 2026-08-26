@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { config } from "./config.js";
+import { recordUsage } from "./db.js";
 
 const client = new Anthropic();
 
@@ -128,6 +129,8 @@ async function visionCheck(image: Buffer, mimeType: string): Promise<PaymentChec
     ],
     output_config: { format: zodOutputFormat(ScreenshotSchema) },
   });
+
+  await recordUsage({ kind: "vision", model: config.anthropic.visionModel, usage: (response as any).usage });
 
   const parsed = response.parsed_output;
   if (!parsed) {

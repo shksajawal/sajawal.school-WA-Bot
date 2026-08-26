@@ -331,3 +331,75 @@ export async function supportQueriesSince(since: Date): Promise<SupportQueryRow[
   );
   return res.rows;
 }
+
+/** Per-million-token USD pricing. Cache reads are 0.1x input; writes 1.25x. */
+const MODEL_PRICING: Record<string, { in: number; out: number }> = {
+  "claude-haiku-4-5": { in: 1, out: 5 },
+  "claude-sonnet-5": { in: 3, out: 15 },
+  "claude-opus-5": { in: 5, out: 25 },
+};
+
+export async function recordUsage(opts: {
+  kind: "chat" | "vision";
+  model: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number | null;
+    cache_creation_input_tokens?: number | null;
+  } | null;
+}): Promise<void> {
+  const u = opts.usage;
+  if (!u) return;
+  try {
+    await pool.query(
+      `INSERT INTO api_usage (kind, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [
+        opts.kind,
+        opts.model,
+        u.input_tokens ?? 0,
+        u.output_tokens ?? 0,
+        u.cache_read_input_tokens ?? 0,
+        u.cache_creation_input_tokens ?? 0,
+      ],
+    );
+  } catch (err) {
+    // Never let bookkeeping break a conversation
+    console.error("recordUsage failed:", err);
+  }
+}
+
+export interface UsageDay {
+  day: string;
+  calls: number;
+  usd: number;
+}
+
+/** Cost per PKT day for the last N days, computed from the token ledger. */
+export async function usageByDay(days = 7): Promise<UsageDay[]> {
+  const res = await pool.query(
+    `SELECT to_char(created_at AT TIME ZONE 'Asia/Karachi','YYYY-MM-DD') AS day,
+            model, count(*)::int AS calls,
+            sum(input_tokens)::bigint AS inp, sum(output_tokens)::bigint AS outp,
+            sum(cache_read_tokens)::bigint AS cread, sum(cache_write_tokens)::bigint AS cwrite
+     FROM api_usage WHERE created_at > now() - make_interval(days => $1)
+     GROUP BY 1, 2 ORDER BY 1 DESC`,
+    [days],
+  );
+  const byDay = new Map<string, UsageDay>();
+  for (const r of res.rows) {
+    const p = MODEL_PRICING[r.model] ?? { in: 3, out: 15 };
+    const usd =
+      (Number(r.inp) * p.in +
+        Number(r.cread) * p.in * 0.1 +
+        Number(r.cwrite) * p.in * 1.25 +
+        Number(r.outp) * p.out) /
+      1_000_000;
+    const cur = byDay.get(r.day) ?? { day: r.day, calls: 0, usd: 0 };
+    cur.calls += r.calls;
+    cur.usd += usd;
+    byDay.set(r.day, cur);
+  }
+  return [...byDay.values()];
+}

@@ -3,7 +3,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { config } from "../config.js";
 import { sendCapiEvent } from "../capi.js";
-import { insertSupportQuery, type Contact, type StoredMessage, updateContact } from "../db.js";
+import { insertSupportQuery, recordUsage, type Contact, type StoredMessage, updateContact } from "../db.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { pingTeam } from "../ops.js";
 
@@ -143,6 +143,8 @@ export async function generateReply(
     tools: buildTools(contact),
     messages,
   });
+
+  await recordUsage({ kind: "chat", model: config.anthropic.model, usage: finalMessage.usage as any });
 
   const text = finalMessage.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")

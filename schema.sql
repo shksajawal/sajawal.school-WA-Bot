@@ -86,3 +86,17 @@ CREATE TABLE IF NOT EXISTS bot_state (
   value TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Anthropic token ledger, so API spend is measured from our own data rather
+-- than estimated. One row per model call.
+CREATE TABLE IF NOT EXISTS api_usage (
+  id SERIAL PRIMARY KEY,
+  kind TEXT NOT NULL,              -- 'chat' | 'vision'
+  model TEXT NOT NULL,
+  input_tokens INT NOT NULL DEFAULT 0,
+  output_tokens INT NOT NULL DEFAULT 0,
+  cache_read_tokens INT NOT NULL DEFAULT 0,
+  cache_write_tokens INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_api_usage_created ON api_usage(created_at);

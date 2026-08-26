@@ -2,6 +2,7 @@ import { config } from "./config.js";
 import { sendImage, sendText, uploadMedia } from "./whatsapp.js";
 import { contactByWaId, funnelSummary, getRecentMessages, openSupportQueries, opsActionItems, paymentScreenshot, recentSales } from "./db.js";
 import { sendTeamBrief } from "./workers/digest.js";
+import { usageByDay } from "./db.js";
 
 /**
  * Read-only WhatsApp interface for the team. Admin and support numbers text the
@@ -57,6 +58,7 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
     const num = t.replace(/[^0-9]/g, "");
     if (/chat|history|transcript/.test(t) && num.length >= 10) await replyChat(from, num);
     else if (num.length >= 11 && num.length <= 15 && /^\d+$/.test(t.replace(/[\s+-]/g, ""))) await replyChat(from, num);
+    else if (/cost|spend|usage|api|credit/.test(t)) await replyCost(from);
     else if (/update|brief|latest|abhi|now/.test(t)) await sendTeamBrief(true);
     else if (/sale|sold|revenue|payment|paisa/.test(t)) await replySales(from);
     else if (/lead|pending|action|follow|kaam/.test(t)) await replyLeads(from);
@@ -89,6 +91,18 @@ async function replyChat(to: string, digits: string): Promise<void> {
     to,
     `💬 ${contact.name ?? "?"} (wa.me/${contact.wa_id}) — ${contact.status}${contact.email ? ` — ${contact.email}` : ""}\n\n${lines.join("\n")}`,
   );
+}
+
+/** "cost" — measured Anthropic spend per day, from our own token ledger. */
+async function replyCost(to: string): Promise<void> {
+  const days = await usageByDay(7);
+  if (!days.length) {
+    await sendText(to, "No API usage recorded yet.");
+    return;
+  }
+  const total = days.reduce((s, d) => s + d.usd, 0);
+  const lines = days.map((d) => `${d.day}: $${d.usd.toFixed(2)} (${d.calls} calls)`);
+  await sendText(to, `🧮 Claude API spend (7 days)\n\n${lines.join("\n")}\n\nTotal: $${total.toFixed(2)}`);
 }
 
 async function replySales(to: string): Promise<void> {
