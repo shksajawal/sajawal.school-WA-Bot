@@ -237,7 +237,7 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
  * being reasoned about.
  */
 const DRIP_LINES: Record<number, string> = {
-  0: "Wslam! 🙂 Are you a complete beginner, or do you already have some experience with digital marketing?",
+  0: "Wslam! 🙂 Ye 8 hafte ka plan hai — clients lena, job, ya apni ads profitable karna, jo bhi aap ka goal ho.\n\nPehle ye batayein, aap bilkul beginner hain ya thora experience hai?",
   1: "Great, that helps. I will guide you in the right direction from where you are.\n\nJust tell me one thing. How much time can you give daily. 1 hour. 2 hours. Or more than that?",
   2: "Perfect. Every single person who is earning online today started without knowing anything as well.\n\nThe mistake most people make is they spend months learning random stuff and then wonder why no money is coming in.\n\nWhat usually works better is learning one skill first and then learning how to actually get clients for it. Because knowing something and getting paid for it are two different things.\n\nThat's exactly why we built the program. Everything is in one place so you don't have to figure out what to learn next.\n\nIf you want the details, just reply with the word \"details\" and I'll share everything with you. No pressure.",
 };
