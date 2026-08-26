@@ -1,8 +1,8 @@
 import { Worker } from "bullmq";
 import { config } from "../config.js";
 import { connection, scheduleFollowup, type FollowupJob } from "../queue.js";
-import { getContact, getRecentMessages, insertMessage } from "../db.js";
-import { sendTemplate, sendText } from "../whatsapp.js";
+import { getContact, getRecentMessages, insertMessage, insertSupportQuery } from "../db.js";
+import { sendText } from "../whatsapp.js";
 import { generateReply } from "../agent/agent.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -11,7 +11,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * Follow-up strategy:
  * - Inside the 24h customer-service window → a contextual, Claude-written nudge
  *   that references the actual conversation (free-form messages are allowed).
- * - Outside 24h → the pre-approved template (Meta requires templates there).
+ * - Outside 24h → NO template (owner's call: templates are billed per message).
+ *   The lead is handed to the human team instead — they message from a normal
+ *   WhatsApp number, which has no 24h restriction — and it lands in the daily
+ *   follow-up digest with context.
  * - Hard cap on touches; any reply from the user resets the sequence.
  */
 export function startFollowupWorker(): Worker {
@@ -45,25 +48,20 @@ export function startFollowupWorker(): Worker {
           const waMsgId = await sendText(contact.wa_id, nudge);
           await insertMessage({ contactId, waMessageId: waMsgId, direction: "out", body: nudge });
         }
+        // Chain one more nudge only while the free window is still open
+        if (touch < config.followup.maxTouches) {
+          await scheduleFollowup({ contactId, touch: touch + 1, lastUserMsgAt }, DAY_MS);
+        }
       } else {
-        // Outside the window → approved template only
-        const waMsgId = await sendTemplate(
-          contact.wa_id,
-          config.followup.templateName,
-          config.followup.templateLanguage,
-        );
-        await insertMessage({
+        // Past the free window. No template (billed per message). Hand the lead
+        // to the humans with context — they can open a chat from their own
+        // number without any window restriction.
+        const history = await getRecentMessages(contactId, 6);
+        const lastAsk = [...history].reverse().find((m) => m.direction === "in")?.body ?? "";
+        await insertSupportQuery(
           contactId,
-          waMessageId: waMsgId,
-          direction: "out",
-          msgType: "template",
-          body: `[template:${config.followup.templateName}]`,
-        });
-      }
-
-      // Chain the next touch (24h later), still keyed to the same silence
-      if (touch < config.followup.maxTouches) {
-        await scheduleFollowup({ contactId, touch: touch + 1, lastUserMsgAt }, DAY_MS);
+          `Follow-up needed (quiet 24h+). ${contact.qualified ? "QUALIFIED. " : ""}Last said: "${lastAsk.slice(0, 90)}"`,
+        );
       }
     },
     { connection, concurrency: 4 },
