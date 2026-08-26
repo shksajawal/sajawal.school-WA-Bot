@@ -78,3 +78,11 @@ UPDATE contacts SET drip_step = -1 WHERE drip_step = 0 AND EXISTS
 
 -- Buyer email: required for the Skool login invite; captured in-chat post-purchase.
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS email TEXT;
+
+-- Tiny key/value for scheduler state (last team brief timestamp), so frequent
+-- redeploys never re-send or skip a brief.
+CREATE TABLE IF NOT EXISTS bot_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

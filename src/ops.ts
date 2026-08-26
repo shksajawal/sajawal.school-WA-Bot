@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 import { sendImage, sendText, uploadMedia } from "./whatsapp.js";
 import { contactByWaId, funnelSummary, getRecentMessages, openSupportQueries, opsActionItems, paymentScreenshot, recentSales } from "./db.js";
+import { sendTeamBrief } from "./workers/digest.js";
 
 /**
  * Read-only WhatsApp interface for the team. Admin and support numbers text the
@@ -56,6 +57,7 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
     const num = t.replace(/[^0-9]/g, "");
     if (/chat|history|transcript/.test(t) && num.length >= 10) await replyChat(from, num);
     else if (num.length >= 11 && num.length <= 15 && /^\d+$/.test(t.replace(/[\s+-]/g, ""))) await replyChat(from, num);
+    else if (/update|brief|latest|abhi|now/.test(t)) await sendTeamBrief(true);
     else if (/sale|sold|revenue|payment|paisa/.test(t)) await replySales(from);
     else if (/lead|pending|action|follow|kaam/.test(t)) await replyLeads(from);
     else if (/help|command|option/.test(t)) await replyHelp(from);
@@ -151,6 +153,6 @@ async function replyDigest(to: string): Promise<void> {
 async function replyHelp(to: string): Promise<void> {
   await sendText(
     to,
-    `Commands:\n\n"sales" — verified sales from the last 7 days, with screenshots\n"leads" — everyone needing action (payment reviews, incomplete checkouts, silent hot leads)\na phone number — that customer` + "\u2019" + `s recent chat transcript\nanything else — today` + "\u2019" + `s summary\n\nThis interface is read-only — nothing can be changed or deleted from here.`,
+    `Commands:\n\n"sales" — verified sales from the last 7 days, with screenshots\n"leads" — everyone needing action (payment reviews, incomplete checkouts, silent hot leads)\n"update" — what\u2019s new since the last brief\na phone number — that customer` + "\u2019" + `s recent chat transcript\nanything else — today` + "\u2019" + `s summary\n\nThis interface is read-only — nothing can be changed or deleted from here.`,
   );
 }

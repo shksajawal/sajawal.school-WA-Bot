@@ -295,3 +295,39 @@ export async function contactByWaId(waId: string): Promise<Contact | null> {
   const res = await pool.query(`SELECT * FROM contacts WHERE wa_id = $1`, [waId]);
   return res.rows[0] ?? null;
 }
+
+export async function getState(key: string): Promise<string | null> {
+  const res = await pool.query(`SELECT value FROM bot_state WHERE key = $1`, [key]);
+  return res.rows[0]?.value ?? null;
+}
+
+export async function setState(key: string, value: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO bot_state (key, value, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [key, value],
+  );
+}
+
+/** Verified sales since a timestamp — the "what's new" half of the team brief. */
+export async function salesSince(since: Date): Promise<SaleRow[]> {
+  const res = await pool.query(
+    `SELECT p.id AS payment_id, p.amount::text AS amount, p.reference, p.created_at AS paid_at,
+            c.name, c.wa_id, c.email, (c.ctwa_clid IS NOT NULL) AS from_ad,
+            (p.screenshot IS NOT NULL) AS has_screenshot
+     FROM payments p JOIN contacts c ON c.id = p.contact_id
+     WHERE p.verified AND p.created_at > $1 ORDER BY p.created_at`,
+    [since],
+  );
+  return res.rows;
+}
+
+export async function supportQueriesSince(since: Date): Promise<SupportQueryRow[]> {
+  const res = await pool.query(
+    `SELECT c.name, c.wa_id, q.summary, q.created_at
+     FROM support_queue q JOIN contacts c ON c.id = q.contact_id
+     WHERE q.created_at > $1 ORDER BY q.created_at`,
+    [since],
+  );
+  return res.rows;
+}

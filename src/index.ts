@@ -4,7 +4,7 @@ import { initDb } from "./db.js";
 import { buildServer } from "./server.js";
 import { startInboundWorker, startReplyWorker } from "./workers/inbound.js";
 import { startFollowupWorker } from "./workers/followup.js";
-import { startDigestScheduler } from "./workers/digest.js";
+import { startBriefScheduler } from "./workers/digest.js";
 
 function loud(worker: Worker): Worker {
   worker.on("failed", (job, err) => {
@@ -48,8 +48,8 @@ async function main() {
   loud(startInboundWorker());
   loud(startReplyWorker());
   loud(startFollowupWorker());
-  startDigestScheduler();
-  console.log("Workers started (daily digest scheduler armed)");
+  startBriefScheduler();
+  console.log("Workers started (team brief scheduler armed)");
 
   const app = await buildServer();
   await app.listen({ port: config.port, host: "0.0.0.0" });
