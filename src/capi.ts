@@ -43,7 +43,10 @@ export async function sendCapiEvent(
           messaging_channel: "whatsapp",
           event_id: eventId,
           user_data: {
-            whatsapp_business_account_id: config.whatsapp.wabaId,
+            // No whatsapp_business_account_id here: since 2026-08-28 events go to
+            // the WEB pixel (page-linked for chat activity), and a dataset without
+            // a WABA link rejects that field with subcode 2804132. page_id +
+            // ctwa_clid alone are accepted (verified live) and carry attribution.
             ...(config.capi.pageId ? { page_id: config.capi.pageId } : {}),
             ...(contact.ctwa_clid ? { ctwa_clid: contact.ctwa_clid } : {}),
             ph: [sha256(contact.wa_id)],
