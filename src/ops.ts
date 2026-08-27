@@ -1,5 +1,5 @@
 import { config } from "./config.js";
-import { sendImage, sendText, uploadMedia } from "./whatsapp.js";
+import { sendImage, sendAudio, sendText, uploadMedia } from "./whatsapp.js";
 import { contactByWaId, funnelSummary, getRecentMessages, openSupportQueries, opsActionItems, paymentScreenshot, recentSales } from "./db.js";
 import { sendTeamBrief } from "./workers/digest.js";
 import { usageByDay } from "./db.js";
@@ -29,6 +29,24 @@ const fmtPKT = (d: Date | string | null): string =>
  * 24h window is closed the send just fails — the "leads" report is the backstop,
  * and any team message to the bot reopens their window.
  */
+/** Broadcast a forwarded voice note to the team, same recipients as pingTeam. */
+export async function pingTeamAudio(mediaId: string): Promise<void> {
+  const targets = [
+    ...new Set(
+      [config.ops.supportNumber, config.ops.adminNumber, config.opsAlertNumber].filter(
+        (n): n is string => Boolean(n),
+      ),
+    ),
+  ];
+  for (const to of targets) {
+    try {
+      await sendAudio(to, mediaId);
+    } catch (err) {
+      console.error("Team audio forward failed (window likely closed):", err);
+    }
+  }
+}
+
 export async function pingTeam(note: string): Promise<void> {
   const targets = [
     ...new Set(

@@ -18,10 +18,10 @@ import {
   verifiedReferenceExists,
   type Contact,
 } from "../db.js";
-import { downloadMedia, markReadWithTyping, sendText } from "../whatsapp.js";
+import { downloadMedia, markReadWithTyping, sendText, uploadMedia } from "../whatsapp.js";
 import { sendCapiEvent } from "../capi.js";
 import { verifyPaymentScreenshot } from "../payments.js";
-import { handleOpsMessage, isOpsNumber, pingTeam } from "../ops.js";
+import { handleOpsMessage, isOpsNumber, pingTeam, pingTeamAudio } from "../ops.js";
 import { matchFaq } from "../faq.js";
 import { generateReply } from "../agent/agent.js";
 
@@ -127,13 +127,28 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
 
     await enqueueReply({ contactId: contact.id, afterMessageId: dbMsgId });
   } else if (m.type === "reaction" || m.type === "sticker") {
-    // A 👍 or sticker is a gesture, not a question. Replying "file type not
-    // supported" to it is the loudest AI-tell we have — stay silent.
+    // A gesture, not a question — stay silent.
+  } else if (m.type === "audio") {
+    // Voice notes killed ~20 conversations with the old "file type not
+    // supported" line. The customer gets NO robot reply; the note is forwarded
+    // to the team, who answer the customer directly from the support number.
+    try {
+      const audioId = (m as any).audio?.id;
+      if (audioId) {
+        const { buffer, mimeType } = await downloadMedia(audioId);
+        const forwardId = await uploadMedia(buffer, mimeType);
+        await pingTeam(
+          `\u{1F3A4} Voice note from ${contact.name ?? "?"} (wa.me/${contact.wa_id}) \u2014 bot stays silent on voice notes. Please listen (forwarded next) and reply to the customer from the support number.`,
+        );
+        await pingTeamAudio(forwardId);
+      }
+    } catch (err) {
+      console.error("Voice note forward failed:", err);
+      await pingTeam(`\u{1F3A4} Voice note from wa.me/${contact.wa_id} could not be forwarded \u2014 please check the chat.`);
+    }
   } else {
-    await sendBotText(
-      contact,
-      "Yeh file type abhi support nahi hoti — please apna sawal text mein likhein, ya payment ki soorat mein screenshot (image) bhejein. 🙂",
-    );
+    // Other media (video, documents, locations): no robot line — flag for a human.
+    await pingTeam(`\u{1F4CE} ${m.type} received from ${contact.name ?? "?"} (wa.me/${contact.wa_id}) \u2014 bot cannot read it; reply from the support number if it needs an answer.`);
   }
 }
 
@@ -236,37 +251,33 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
  * messages are. Claude therefore spends tokens only where a sale is actually
  * being reasoned about.
  */
-const DRIP_LINES: Record<number, string> = {
-  0: "Wslam! 🙂 Ye 8 hafte ka plan hai — clients lena, job, ya apni ads profitable karna, jo bhi aap ka goal ho.\n\nPehle ye batayein, aap bilkul beginner hain ya thora experience hai?",
-  1: "Great, that helps. I will guide you in the right direction from where you are.\n\nJust tell me one thing. How much time can you give daily. 1 hour. 2 hours. Or more than that?",
-  2: "Perfect. Every single person who is earning online today started without knowing anything as well.\n\nThe mistake most people make is they spend months learning random stuff and then wonder why no money is coming in.\n\nWhat usually works better is learning one skill first and then learning how to actually get clients for it. Because knowing something and getting paid for it are two different things.\n\nThat's exactly why we built the program. Everything is in one place so you don't have to figure out what to learn next.\n\nIf you want the details, just reply with the word \"details\" and I'll share everything with you. No pressure.",
-};
+// One consistent opener for cold CTWA leads. Owner's direction (2026-08-28):
+// summarise the offer + both prices in relatable copy and let THEM ask the
+// questions. No interrogation steps — the old 3-step script (beginner? / how
+// much time daily?) was where 18% of dead conversations ended, and the answers
+// were never used. After this single message Claude owns the conversation.
+const OPENER =
+  "Wslam! \u{1F642}\n\nYe course digital marketing se earning start karne ke liye hai \u2014 chahe aap clients lena chahte hon, job, ya apna business grow karna.\n\nIsme ads chalana, content banana, aur sab se important \u2014 paying clients laana, sab practical step by step sikhaya jata hai. Sajawal ke live sessions aur community support ke sath.\n\n2 plans hain: Core Rs 3,900 aur Advance Rs 8,700.\n\nJo bhi poochna ho, yahin pooch lein \u{1F642}";
 
 async function runDrip(contact: Contact, body: string): Promise<boolean> {
-  if (contact.drip_step < 0 || contact.drip_step > 2) return false;
-  const text = body.trim();
-  // Real engagement exits the script: questions, long messages, or anything
-  // about price/payment goes straight to Claude with full history.
-  const exits =
-    text.includes("?") ||
-    text.length > 70 ||
-    /price|fee|fees|rate|charge|kitn|paise|pais|rupee|rs\b|discount|payment|pay\b|refund/i.test(text);
-  if (exits && !(contact.drip_step === 0 && /can i get more info|interested/i.test(text))) {
+  // Contacts mid-way through the retired 3-step script fall through to Claude.
+  if (contact.drip_step > 0) {
     await updateContact(contact.id, { drip_step: -1 });
     contact.drip_step = -1;
     return false;
   }
-  let line = DRIP_LINES[contact.drip_step];
-  // Step 1 reassures beginners specifically; saying "starting from zero is no
-  // issue" to someone who just said they have experience reads as not listening.
-  if (contact.drip_step === 1 && /beginner|zero|nothing|naya|new|no experience|bilkul/i.test(text)) {
-    line =
-      "Great. If you are starting from zero there is no issue at all, that is exactly who this is built for. I will guide you in the right direction first.\n\nJust tell me one thing. How much time can you give daily. 1 hour. 2 hours. Or more than that?";
-  }
-  const next = contact.drip_step + 1;
-  await updateContact(contact.id, { drip_step: next > 2 ? -1 : next });
-  contact.drip_step = next > 2 ? -1 : next;
-  await sendBotText(contact, line);
+  if (contact.drip_step !== 0) return false;
+  const text = body.trim();
+  // A substantive first message (a question, anything long, anything about
+  // price/payment) deserves a real answer, not a script — straight to Claude.
+  const exits =
+    text.includes("?") ||
+    text.length > 70 ||
+    /price|fee|fees|rate|charge|kitn|paise|pais|rupee|rs\b|discount|payment|pay\b|refund/i.test(text);
+  await updateContact(contact.id, { drip_step: -1 });
+  contact.drip_step = -1;
+  if (exits && !/can i get more info|interested/i.test(text)) return false;
+  await sendBotText(contact, OPENER);
   await armFollowup(contact);
   return true;
 }

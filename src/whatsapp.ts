@@ -96,6 +96,17 @@ export async function uploadMedia(buffer: Buffer, mimeType: string): Promise<str
   return json.id;
 }
 
+/** Send an audio message by media id (voice notes forwarded to the team). */
+export async function sendAudio(to: string, mediaId: string): Promise<string | null> {
+  const json = await graphPost(`${config.whatsapp.phoneNumberId}/messages`, {
+    messaging_product: "whatsapp",
+    to,
+    type: "audio",
+    audio: { id: mediaId },
+  });
+  return json.messages?.[0]?.id ?? null;
+}
+
 /** Send an image by media id (e.g. a stored payment screenshot to the team). */
 export async function sendImage(to: string, mediaId: string, caption?: string): Promise<string | null> {
   const json = await graphPost(`${config.whatsapp.phoneNumberId}/messages`, {
