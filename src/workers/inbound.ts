@@ -251,13 +251,11 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
  * messages are. Claude therefore spends tokens only where a sale is actually
  * being reasoned about.
  */
-// One consistent opener for cold CTWA leads. Owner's direction (2026-08-28):
-// summarise the offer + both prices in relatable copy and let THEM ask the
-// questions. No interrogation steps — the old 3-step script (beginner? / how
-// much time daily?) was where 18% of dead conversations ended, and the answers
-// were never used. After this single message Claude owns the conversation.
+// Owner's opener, verbatim (2026-08-29). Salman persona + 1-4 stage menu; the
+// lead replies with a number and Claude pitches to that segment. Only edit
+// this text on the owner's explicit instruction.
 const OPENER =
-  "Wslam! \u{1F642}\n\nAap ne bilkul sahi jagah message kia hai \u2014 yahan hum sikhate hain k digital marketing se earning kaise hoti hai: clients le kar, job, ya apna business barha kar.\n\nSirf videos nahi \u2014 paying clients tak pohanchne ka poora system, Sajawal ke live sessions, community aur support ke sath. 67,000+ students already isi se seekh rahe hain.\n\n2 plans: Core Rs 3,900 \u2022 Advance Rs 8,700\n\nFees, start, ya kuch bhi \u2014 seedha pooch lein \u{1F642}";
+  "Salam! \u{1F44B} Sajawal.School se Salman baat kar raha hoon.\n\nHum Pakistan ki sab se bari digital marketing community hain, 67,000+ students. Yahan sirf course nahi milta, zero se le kar apna kaam ya clients tak ka poora system milta hai, har step k lie practical knowledge, guidance, live sessions aur ek aisi community jahan roz koi na koi apni pehli sale ya pehla client share karta hai.\n\nAap kis stage pe hain, taake main sahi guide kar sakoon:\n1. Bilkul zero se seekhna hai\n2. Freelancing kar rahe hain, clients/income barhani hai\n3. Apna business hai, ads khud chalani hain\n4. Abhi clear nahi ke kya karna chahiye\n\nBas number reply karein. Zyada tar log hamara Advance plan lete hain, lekin aapke liye kya sahi hai wo aapke jawab pe depend karta hai \u{1F642}";
 
 async function runDrip(contact: Contact, body: string): Promise<boolean> {
   // Contacts mid-way through the retired 3-step script fall through to Claude.
