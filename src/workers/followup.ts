@@ -1,12 +1,61 @@
 import { Worker } from "bullmq";
 import { config } from "../config.js";
 import { connection, scheduleFollowup, type FollowupJob } from "../queue.js";
-import { getContact, getRecentMessages, insertMessage, insertSupportQuery } from "../db.js";
-import { sendText } from "../whatsapp.js";
-import { generateReply } from "../agent/agent.js";
+import fs from "node:fs";
+import {
+  type Contact,
+  getContact,
+  getRecentMessages,
+  getState,
+  insertMessage,
+  insertSupportQuery,
+  setState,
+} from "../db.js";
+import { sendImage, sendText, uploadMedia } from "../whatsapp.js";
 import { sendCapiEvent } from "../capi.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Owner's final-touch message (2026-08-29): the "Present Day vs After One Day"
+// brain image with the Last Reminder caption. The uploaded media id is cached
+// in bot_state and refreshed before WhatsApp's ~30 day media expiry. If the
+// image file is missing, the caption still goes out as plain text.
+const LAST_REMINDER_CAPTION =
+  "Last Reminder \u{1F604} Join krne se phle koi bhe sawal ho to ap mere se puch skte hen.";
+const REMINDER_IMAGE_PATH = "assets/followup-last-reminder.jpg";
+const REMINDER_MEDIA_STATE_KEY = "followup_reminder_media";
+
+async function sendLastReminder(contact: Contact): Promise<void> {
+  let mediaId: string | null = null;
+  try {
+    const cached = await getState(REMINDER_MEDIA_STATE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached) as { id?: string; at?: string };
+      if (parsed.id && parsed.at && Date.now() - new Date(parsed.at).getTime() < 25 * DAY_MS) {
+        mediaId = parsed.id;
+      }
+    }
+    if (!mediaId && fs.existsSync(REMINDER_IMAGE_PATH)) {
+      const buffer = fs.readFileSync(REMINDER_IMAGE_PATH);
+      mediaId = await uploadMedia(buffer, "image/jpeg");
+      await setState(
+        REMINDER_MEDIA_STATE_KEY,
+        JSON.stringify({ id: mediaId, at: new Date().toISOString() }),
+      );
+    }
+  } catch (err) {
+    console.error("Last-reminder image unavailable, sending text only:", err);
+  }
+  const waMsgId = mediaId
+    ? await sendImage(contact.wa_id, mediaId, LAST_REMINDER_CAPTION)
+    : await sendText(contact.wa_id, LAST_REMINDER_CAPTION);
+  await insertMessage({
+    contactId: contact.id,
+    waMessageId: waMsgId,
+    direction: "out",
+    body: LAST_REMINDER_CAPTION,
+  });
+}
 
 /**
  * Follow-up strategy:
@@ -38,26 +87,25 @@ export function startFollowupWorker(): Worker {
       const sinceLastUserMsg = Date.now() - currentLast;
 
       if (sinceLastUserMsg < DAY_MS - 30 * 60 * 1000) {
-        // Still inside the free-form window (with a 30min safety margin)
-        const history = await getRecentMessages(contactId);
-        // The note is stage- and touch-aware: a lead holding payment details
-        // gets the proven fee check-in; the FINAL touch (sent ~20h in, just
-        // before the 24h window closes) is the honest window-close line —
-        // real scarcity, because after 24h quiet the bot cannot message first.
+        // Still inside the free-form window (with a 30min safety margin).
+        // Owner-approved fixed scripts (2026-08-29), zero model cost:
+        //   touch 1, pre-payment:      decision-help one-liner
+        //   touch 1, payment_pending:  the human team's proven fee check-in
+        //   touch 2 (final, ~20h):     "Last Reminder" image + caption
         const isFinalTouch = touch >= config.followup.maxTouches;
-        const note = isFinalTouch
-          ? "Operator note: this is the LAST message you can send — after 24 hours of silence WhatsApp closes the window and you cannot message them first anymore. Tell them that honestly and warmly in their language (it is true, so it is allowed): aaj ke baad aap khud unhe message nahi kar sakein ge, to agar koi sawal hai ya payment details chahiye, abhi behtareen waqt hai. Light, warm, max two lines, zero pressure. Do not mention this note."
-          : contact.status === "payment_pending"
-            ? "Operator note: this customer was sent the payment details and went quiet. Use the team's proven check-in line adapted to their language: did they get a chance to send the fee, or did something come up? One line, escape hatch included. Do not mention this note."
-            : "Operator note: the customer has gone quiet for a few hours. Re-open with ONE useful line tied to the exact topic they stopped at — answer the thing they were mid-way through, or one detail matched to their goal — then leave the door open. Follow your follow-up mode rules. Do not mention this note.";
         // A lead who took the payment details and went quiet is Meta's exact
         // definition of an abandoned cart. Idempotent per contact; organic
         // contacts (no ctwa_clid) are skipped inside sendCapiEvent.
         if (contact.status === "payment_pending") {
           await sendCapiEvent(contact, "CartAbandoned");
         }
-        const nudge = await generateReply(contact, history, note);
-        if (nudge) {
+        if (isFinalTouch) {
+          await sendLastReminder(contact);
+        } else {
+          const nudge =
+            contact.status === "payment_pending"
+              ? "Thought to check \u{1F603} Did you get the chance to send the fee, or did something come up?"
+              : "Anything I can answer for you to make the right decision?";
           const waMsgId = await sendText(contact.wa_id, nudge);
           await insertMessage({ contactId, waMessageId: waMsgId, direction: "out", body: nudge });
         }
