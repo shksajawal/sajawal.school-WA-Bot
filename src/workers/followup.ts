@@ -39,11 +39,17 @@ export function startFollowupWorker(): Worker {
       if (sinceLastUserMsg < DAY_MS - 30 * 60 * 1000) {
         // Still inside the free-form window (with a 30min safety margin)
         const history = await getRecentMessages(contactId);
-        const nudge = await generateReply(
-          contact,
-          history,
-          "Operator note: the customer has gone quiet for a few hours. Write ONE short, natural follow-up message per your follow-up mode rules. Do not mention this note.",
-        );
+        // The note is stage- and touch-aware: a lead holding payment details
+        // gets the proven fee check-in; the FINAL touch (sent ~20h in, just
+        // before the 24h window closes) is the honest window-close line —
+        // real scarcity, because after 24h quiet the bot cannot message first.
+        const isFinalTouch = touch >= config.followup.maxTouches;
+        const note = isFinalTouch
+          ? "Operator note: this is the LAST message you can send — after 24 hours of silence WhatsApp closes the window and you cannot message them first anymore. Tell them that honestly and warmly in their language (it is true, so it is allowed): aaj ke baad aap khud unhe message nahi kar sakein ge, to agar koi sawal hai ya payment details chahiye, abhi behtareen waqt hai. Light, warm, max two lines, zero pressure. Do not mention this note."
+          : contact.status === "payment_pending"
+            ? "Operator note: this customer was sent the payment details and went quiet. Use the team's proven check-in line adapted to their language: did they get a chance to send the fee, or did something come up? One line, escape hatch included. Do not mention this note."
+            : "Operator note: the customer has gone quiet for a few hours. Re-open with ONE useful line tied to the exact topic they stopped at — answer the thing they were mid-way through, or one detail matched to their goal — then leave the door open. Follow your follow-up mode rules. Do not mention this note.";
+        const nudge = await generateReply(contact, history, note);
         if (nudge) {
           const waMsgId = await sendText(contact.wa_id, nudge);
           await insertMessage({ contactId, waMessageId: waMsgId, direction: "out", body: nudge });

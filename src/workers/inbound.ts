@@ -257,7 +257,7 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
 // much time daily?) was where 18% of dead conversations ended, and the answers
 // were never used. After this single message Claude owns the conversation.
 const OPENER =
-  "Wslam! \u{1F642}\n\nYe course digital marketing se earning start karne ke liye hai \u2014 chahe aap clients lena chahte hon, job, ya apna business grow karna.\n\nIsme ads chalana, content banana, aur sab se important \u2014 paying clients laana, sab practical step by step sikhaya jata hai. Sajawal ke live sessions aur community support ke sath.\n\n2 plans hain: Core Rs 3,900 aur Advance Rs 8,700.\n\nJo bhi poochna ho, yahin pooch lein \u{1F642}";
+  "Wslam! \u{1F642}\n\nAap ne bilkul sahi jagah message kia hai \u2014 yahan hum sikhate hain k digital marketing se earning kaise hoti hai: clients le kar, job, ya apna business barha kar.\n\nSirf videos nahi \u2014 paying clients tak pohanchne ka poora system, Sajawal ke live sessions, community aur support ke sath. 67,000+ students already isi se seekh rahe hain.\n\n2 plans: Core Rs 3,900 \u2022 Advance Rs 8,700\n\nFees, start, ya kuch bhi \u2014 seedha pooch lein \u{1F642}";
 
 async function runDrip(contact: Contact, body: string): Promise<boolean> {
   // Contacts mid-way through the retired 3-step script fall through to Claude.
