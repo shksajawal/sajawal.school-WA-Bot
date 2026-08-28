@@ -257,24 +257,78 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
 const OPENER =
   "Salam! \u{1F44B} Sajawal.School se Salman baat kar raha hoon.\n\nHum Pakistan ki sab se bari digital marketing community hain, 67,000+ students. Yahan sirf course nahi milta, zero se le kar apna kaam ya clients tak ka poora system milta hai, har step k lie practical knowledge, guidance, live sessions aur ek aisi community jahan roz koi na koi apni pehli sale ya pehla client share karta hai.\n\nAap kis stage pe hain, taake main sahi guide kar sakoon:\n1. Bilkul zero se seekhna hai\n2. Freelancing kar rahe hain, clients/income barhani hai\n3. Apna business hai, ads khud chalani hain\n4. Abhi clear nahi ke kya karna chahiye\n\nBas number reply karein. Zyada tar log hamara Advance plan lete hain, lekin aapke liye kya sahi hai wo aapke jawab pe depend karta hai \u{1F642}";
 
+// Owner-approved segment replies (2026-08-29), played verbatim when a lead
+// answers the opener menu with a bare 1-4. Zero model cost. Only edit these
+// on the owner's explicit instruction.
+const MENU_WEBSITE_LINE =
+  "Aik dafa beshak hamari website www.sajawal.school pe bhi saari details check kar lein, students ke reviews bhi www.sajawal.school/reviews pe dekh sakte hain, phir jo bhi sawal ho yahan aa kar pooch lein.";
+const MENU_PRICES_LINE = "Advance Rs 8,700, Core Rs 3,900, dono lifetime access.";
+const MENU_CORE_FALLBACK =
+  "Agar ap ko saray advance modules filhal ni chaien or sirf basics strong krna chahtay hen to core plan join kr skte hen.";
+const MENU_REPLIES: Record<string, string> = {
+  "1": [
+    "Perfect. Hamare 70% students bilkul zero se start karte hain, aur yahin se grow karte hain, to ye aapke liye sab se best starting point hai.",
+    `Zero walon ko main seedha Advance plan recommend karta hoon: basics se le kar ads aur clients tak sara path, plus live sessions. ${MENU_CORE_FALLBACK}`,
+    MENU_PRICES_LINE,
+    MENU_WEBSITE_LINE,
+    "Start karna chahein to batayein, main payment details bhej deta hoon \u{1F642}",
+  ].join("\n\n"),
+  "2": [
+    "Got it. Freelancers ke liye hamara focus do cheezon pe hai: high-value skills (ads jo actual result dein) aur clear direction ke behtar clients kaise milen aur unhe behtar service kaise di jaye. or long term career growth kase kren.",
+    `Aapke liye Advance plan recommended hai, ${MENU_CORE_FALLBACK}`,
+    MENU_PRICES_LINE,
+    MENU_WEBSITE_LINE,
+    "Start karna chahein to batayein, main payment details bhej deta hoon or Koi sawal ho to pooch lein \u{1F642}",
+  ].join("\n\n"),
+  "3": [
+    "Got it. Business owners yahan mainly do cheezein seekhte hain: social media pe strategic content se grow karna, tamaam business basics and essentials, aur Meta/Google ads se scale karna, kisi bhi type ke business ke liye.",
+    `Aapke liye Advance plan recommended ha. ${MENU_CORE_FALLBACK}`,
+    MENU_PRICES_LINE,
+    MENU_WEBSITE_LINE,
+    "Jab ready hon batayein, payment details bhej deta hoon. Koi bhi sawal ho to seedha poochein \u{1F642}",
+  ].join("\n\n"),
+  "4": [
+    "Koi masla nahi, bohat log yahin se start karte hain. Yahan aapko saari options aur unki direction samajh aa jati hai, to aap confuse hone ke bajaye apna raasta confidence se choose karte hain.",
+    `Aapke liye Advance plan recommended ha. ${MENU_CORE_FALLBACK}`,
+    MENU_PRICES_LINE,
+    MENU_WEBSITE_LINE,
+    "Start karna chahein to batayein, main payment details bhej deta hoon \u{1F642}",
+  ].join("\n\n"),
+};
+
 async function runDrip(contact: Contact, body: string): Promise<boolean> {
-  // Contacts mid-way through the retired 3-step script fall through to Claude.
+  const text = body.trim();
+  // The opener's stage menu is pending: a bare 1-4 plays the owner's scripted
+  // segment reply; anything else hands the lead to Claude with full history.
+  if (contact.drip_step === 5) {
+    await updateContact(contact.id, { drip_step: -1 });
+    contact.drip_step = -1;
+    const pick = text.match(/^([1-4])[).\s]*$/)?.[1];
+    if (!pick) return false;
+    await sendBotText(contact, MENU_REPLIES[pick]);
+    await armFollowup(contact);
+    return true;
+  }
+  // Contacts mid-way through retired scripts fall through to Claude.
   if (contact.drip_step > 0) {
     await updateContact(contact.id, { drip_step: -1 });
     contact.drip_step = -1;
     return false;
   }
   if (contact.drip_step !== 0) return false;
-  const text = body.trim();
   // A substantive first message (a question, anything long, anything about
-  // price/payment) deserves a real answer, not a script — straight to Claude.
+  // price/payment) deserves a real answer, not a script. Straight to Claude.
   const exits =
     text.includes("?") ||
     text.length > 70 ||
     /price|fee|fees|rate|charge|kitn|paise|pais|rupee|rs\b|discount|payment|pay\b|refund/i.test(text);
-  await updateContact(contact.id, { drip_step: -1 });
-  contact.drip_step = -1;
-  if (exits && !/can i get more info|interested/i.test(text)) return false;
+  if (exits && !/can i get more info|interested/i.test(text)) {
+    await updateContact(contact.id, { drip_step: -1 });
+    contact.drip_step = -1;
+    return false;
+  }
+  await updateContact(contact.id, { drip_step: 5 });
+  contact.drip_step = 5;
   await sendBotText(contact, OPENER);
   await armFollowup(contact);
   return true;
