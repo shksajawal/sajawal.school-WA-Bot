@@ -10,7 +10,15 @@ function sha256(value: string): string {
 // LeadSubmitted / QualifiedLead / InitiateCheckout / Purchase are ACCEPTED;
 // web-standard names ("Contact", "Lead", "CompleteRegistration") are REJECTED
 // with subcode 2804066. Do not "fix" these to web standard names again.
-export type CapiEventName = "LeadSubmitted" | "QualifiedLead" | "InitiateCheckout" | "Purchase";
+// CartAbandoned added 2026-08-29 (owner-approved): fired when a lead received
+// payment details and went quiet — negative-intent signal per the official
+// business_messaging vocabulary (also valid: AddToCart, ViewContent, Order*).
+export type CapiEventName =
+  | "LeadSubmitted"
+  | "QualifiedLead"
+  | "InitiateCheckout"
+  | "Purchase"
+  | "CartAbandoned";
 
 /**
  * Send a Conversions API event with action_source=business_messaging.

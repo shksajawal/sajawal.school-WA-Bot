@@ -4,6 +4,7 @@ import { connection, scheduleFollowup, type FollowupJob } from "../queue.js";
 import { getContact, getRecentMessages, insertMessage, insertSupportQuery } from "../db.js";
 import { sendText } from "../whatsapp.js";
 import { generateReply } from "../agent/agent.js";
+import { sendCapiEvent } from "../capi.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -49,6 +50,12 @@ export function startFollowupWorker(): Worker {
           : contact.status === "payment_pending"
             ? "Operator note: this customer was sent the payment details and went quiet. Use the team's proven check-in line adapted to their language: did they get a chance to send the fee, or did something come up? One line, escape hatch included. Do not mention this note."
             : "Operator note: the customer has gone quiet for a few hours. Re-open with ONE useful line tied to the exact topic they stopped at — answer the thing they were mid-way through, or one detail matched to their goal — then leave the door open. Follow your follow-up mode rules. Do not mention this note.";
+        // A lead who took the payment details and went quiet is Meta's exact
+        // definition of an abandoned cart. Idempotent per contact; organic
+        // contacts (no ctwa_clid) are skipped inside sendCapiEvent.
+        if (contact.status === "payment_pending") {
+          await sendCapiEvent(contact, "CartAbandoned");
+        }
         const nudge = await generateReply(contact, history, note);
         if (nudge) {
           const waMsgId = await sendText(contact.wa_id, nudge);
