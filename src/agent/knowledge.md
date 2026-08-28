@@ -163,3 +163,45 @@ Buyers may arrive having picked a goal in the quiz. Their goal note at checkout 
 - Exact ad budget needed to start
 - Course length in hours/number of lessons
 - Anything about the Control Room event beyond the one-liner
+
+# Objection playbook (owner's exact answers, 2026-08-29)
+
+Use these framings when the objection comes up. Adapt length and language to the chat, keep the argument and facts exactly as written. Never volunteer an objection the customer has not raised.
+
+1. "YouTube pe free seekh sakta hoon": Bilkul, aur hamare zyada tar students bhi pehle wahin try kar chuke hote hain. Masla ye hai ke YouTube pe lakhon videos hain, order koi nahi, aur kahin phans jayen to poochne wala koi nahi. Yahan ek path hai aur live sessions jahan aap apna sawal la sakte hain. Yahan sara practical knowledge ha jo ap step by step implement kr skte hen.
+
+2. "Ye bhi koi guru course to nahi?": Sahi sawal hai. Farq ye hai ke Sajawal khud agency (Revzo) chalate hain jo brands ki ads pe paisa spend karti hai. Jo sikhaya jata hai wo wahi hai jo roz client accounts pe hota hai, koi secret formula nahi. Aur community public hai, aap khud dekh sakte hain log kya keh rahe hain. www.sajawal.school/reviews
+
+3. "Pata nahi mere se hoga ya nahi": Sach ye hai ke ye kisi ke liye automatically kaam nahi karta. Jo follow karta hai aur live session mein sawal poochta hai, uske liye karta hai. Aap ka darr kis cheez ka hai: technical, English, ya time? Batayein, teenon ka jawab hai.
+
+4. "Pehle bhi course liye, kuch nahi mila": Zyada tar courses mein ek hi cheez missing hoti hai: videos ke baad poochne wala koi nahi. Isi liye Advance mein live sessions aur community hai, taake jab atkein to wahin se aage nikal sakein. Pichle course mein aap kahan atke the?
+
+5. "Main shayad complete hi na karoon": Complete karna goal hai bhi nahi. Goal ye hai ke pehli campaign chalayein ya pehla client lein, aur bohat students 30% content pe hi shuru kar dete hain. Lifetime access hai, race nahi hai.
+
+6. "Online testimonials pe bharosa nahi": Theek karte hain, screenshot koi bhi bana sakta hai. Isi liye do cheezein: hamari community jahan aap khud students se baat kar sakte hain, aur Sajawal ke free YouTube videos jahan sikhane ka tareeqa pehle check kar lein. Reviews public website pe hen www.sajawal.school/reviews
+
+7. "Sasta mil jayega": Mil jayega, aur usme bhi recorded videos hongi. Jo nahi milega wo live sessions aur ek community jahan roz log apna kaam aur sawal share karte hain. Agar budget tight hai to Core Rs 3,900 ka option hai, wo bhi beginners k lie bohat valuable ha.
+
+8. "Time nahi hai": Mobile pe chalta hai, lifetime access hai, to rozana 30-40 minute kaafi hain. Sach ye hai ke time kam ho to random YouTube pe zyada waqt zaya hota hai, kyun ke pata nahi hota kya dekhna hai. Din mein kitna time nikal sakte hen?
+
+9. "Pata nahi kya achieve hoga": Wo aap ke effort pe hai, ye saaf keh doon. Jo ham de sakte hain: 2-3 mahine mein aap Meta/Google ads khud chala sakte honge aur client lena aata hoga. Aage freelance, job ya apna business, wo aap ka choice. Aap in teenon mein se kis taraf soch rahe hain?
+
+10. "Certificate chahiye": Completion certificate milta hai. Lekin sach batata hoon, client ya employer certificate nahi, kaam dekhta hai. Isi liye course mein aap actual campaigns banate hain jo portfolio ban jati hain. Certificate job ke liye chahiye ya kisi aur wajah se?
+
+11. "Make-money gurus se tang aa gaya hoon": Same. Isi liye yahan "lakhon kamao" wala promise nahi hai. Yahan ek skill hai jo har business ko chahiye, aur jo Sajawal ki apni agency roz use karti hai. Skill aap seekhein, kamana aap ke haath mein.
+
+12. "Pirated copies mil jati hain": Mil jayengi, aur puraani hongi. Content update hota rehta hai kyun ke Meta aur Google har kuch mahine mein cheezein badal dete hain. Aur pirated copy mein live session aur sawal poochne ki jagah nahi hoti. Faisla aap ka.
+
+13. "Scam to nahi?": Sahi hai, verify karein. Sajawal.School 3 saal se chal raha hai, Sajawal ka public YouTube aur Instagram hai, community open hai. Jo verify karna chahein bata dein, main bhej deta hoon. Reviews: www.sajawal.school/reviews aur Instagram: www.instagram.com/shk.sajawal
+
+14. "Meri income ke hisaab se mehnga hai": Samajhta hoon. Ab beshak starting plan Core se join kr len jo 3900 ka ha, us se seekhen, kaam krna shuru kren or baad men jase he zarorat mehsoos ho, tab Advance pe upgrade kr len.
+
+15. "Koi guaranteed result nahi": Koi nahi de sakta, aur jo de wo jhoot bol raha hai. Jo ham guarantee karte hain wo ye: poora content, live support, community, lifetime access aur 2 din ka refund ha. Result aap ke kaam se aata hai, aur jo kaam karte hain unke screenshots roz community mein aate hain.
+
+16. "Pehle kisi institute se bura experience hua": Afsos hai. Masla kya tha: support nahi mila, content purana tha, ya promise se kam nikla? Bata dein taake main bata sakoon yahan wo kaise handle hota hai. Aur chahein to pehle free videos dekh lein, phir decide karein.
+
+17. "Government ke free courses hain": DigiSkills achi cheez hai, basics ke liye. Farq wahi hai: wahan recorded lectures hain, yahan live sessions bhe ha, updated or practical knowledge ha, agency-level practical content, aur community. Dono kar sakte hain.
+
+18. "Digital marketing ab bhi legit hai?": Jab tak business ko customer chahiye, tab tak hai. Pakistan mein har mahine hazaron naye online stores or businesses khul rahe hain aur sab ko ads chalane wala chahiye. Sajawal ki agency ka kaam isi se chalta hai.
+
+19. "Aap ke numbers match nahi karte": Sahi pakra. 67,000+ total students hain jo ab tak join kar chuke; Facebook group, WhatsApp community, YouTube alag alag platforms ke alag numbers hain.
