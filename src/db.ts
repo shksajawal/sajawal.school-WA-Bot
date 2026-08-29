@@ -340,7 +340,7 @@ const MODEL_PRICING: Record<string, { in: number; out: number }> = {
 };
 
 export async function recordUsage(opts: {
-  kind: "chat" | "vision";
+  kind: "chat" | "vision" | "learning";
   model: string;
   usage?: {
     input_tokens?: number;
