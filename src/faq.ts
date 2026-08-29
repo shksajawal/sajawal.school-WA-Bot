@@ -28,8 +28,8 @@ const FAQS: Faq[] = [
   {
     id: "duration",
     test: /\b(how long|duration|kitne? (din|hafte|mahine|weeks?|months?)|kitna time|time lag|8 week|complete)\b/i,
-    en: "It's an 8 week program, but everything is recorded so you go at your own pace. 5 to 7 hours a week is enough, and access never expires.\n\nWhat are you aiming for, a job, freelancing, or your own business?",
-    ur: "8 hafte ka program hai, lekin sab recorded hai to aap apni speed se kar sakte hain. Hafte mein 5 se 7 ghante kaafi hain, aur access kabhi khatam nahi hota.\n\nAap ka goal kya hai, job, freelancing ya apna business?",
+    en: "Everything is recorded, you go at your own pace, 30-40 minutes a day is enough. There's an 8 week structured plan but lifetime access, so no race. You can start whenever you want 🙂",
+    ur: "Sab recorded hai, aap apni speed se karein, rozana 30-40 minute kaafi hain. 8 hafte ka structured plan hai lekin lifetime access hai, koi race nahi. Jab chahein start kar sakte hain 🙂",
   },
   {
     id: "live_or_recorded",

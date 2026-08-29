@@ -112,11 +112,16 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
       await sendBotText(contact, `Email mil gaya ✅ (${emailMatch[0]}) — course ka login isi pe aayega.`);
       return;
     }
+    // Was the opener's 1-4 menu pending before this message? If so, a
+    // non-number reply must go to Claude (who knows the menu), NEVER to a
+    // canned FAQ — the owner's defined opening flow outranks the FAQ layer.
+    const wasMenuPending = contact.drip_step === 0 || contact.drip_step === 5;
     if (await runDrip(contact, m.text?.body ?? "")) return;
 
     // Known factual question with a fixed answer -> canned reply, no model call.
-    // Skipped once a buyer is at the payment stage, where every message matters.
-    if (contact.status === "active") {
+    // Skipped during the scripted opening and once a buyer is at the payment
+    // stage, where every message matters.
+    if (contact.status === "active" && !wasMenuPending) {
       const faq = matchFaq(m.text?.body ?? "");
       if (faq) {
         await sendBotText(contact, faq.reply);
@@ -318,17 +323,9 @@ async function runDrip(contact: Contact, body: string): Promise<boolean> {
     return false;
   }
   if (contact.drip_step !== 0) return false;
-  // A substantive first message (a question, anything long, anything about
-  // price/payment) deserves a real answer, not a script. Straight to Claude.
-  const exits =
-    text.includes("?") ||
-    text.length > 70 ||
-    /price|fee|fees|rate|charge|kitn|paise|pais|rupee|rs\b|discount|payment|pay\b|refund/i.test(text);
-  if (exits && !/can i get more info|interested/i.test(text)) {
-    await updateContact(contact.id, { drip_step: -1 });
-    contact.drip_step = -1;
-    return false;
-  }
+  // Owner's rule (2026-08-30): EVERY new lead gets the opener first, no smart
+  // skips. It carries the summary and both prices, so it answers nearly any
+  // first message; whatever it doesn't answer, they'll ask next.
   await updateContact(contact.id, { drip_step: 5 });
   contact.drip_step = 5;
   await sendBotText(contact, OPENER);
