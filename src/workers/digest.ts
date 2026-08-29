@@ -1,11 +1,13 @@
 import {
   getState,
+  learningSamples,
   opsActionItems,
   opsDailyStats,
   setState,
   supportQueriesSince,
 } from "../db.js";
 import { pingTeam } from "../ops.js";
+import { analyzeText } from "../agent/agent.js";
 
 /**
  * Daily team report, owner's spec (2026-08-29):
@@ -95,6 +97,26 @@ export async function sendTeamBrief(_force = false): Promise<boolean> {
           .join("\n") +
         (items.length > 8 ? `\n(+${items.length - 8} more, reply "leads")` : ""),
     );
+  }
+
+  // Nightly self-review: ONE model call comparing today's won vs lost chats.
+  // The lessons go in the report (owner decides what gets baked into the
+  // prompt) and are archived in bot_state for the weekly review.
+  try {
+    const samples = await learningSamples();
+    if (samples.length >= 3) {
+      const convos = samples.map((c, i) => `#${i + 1} [${c.label}]\n${c.convo}`).join("\n\n");
+      const lessons = await analyzeText(
+        "You review today's WhatsApp sales chats for Sajawal.School (the bot poses as Salman). Compare the WON and LOST conversations. Reply with 3-5 short bullets only, max 90 words total, no preamble: what is working, what exactly killed the lost chats (the specific message or moment), one concrete change to close more tomorrow, and whether the bot's tone drifted from casual Pakistani Roman Urdu texting style.",
+        convos,
+      );
+      if (lessons) {
+        parts.push(`\u{1F9E0} Aaj ki learnings:\n${lessons.slice(0, 900)}`);
+        await setState(`learnings_${pktDateStr()}`, lessons);
+      }
+    }
+  } catch (err) {
+    console.error("Learning section failed:", err);
   }
 
   parts.push(`Reply "sales", "leads", "cost" ya "update" kisi bhi waqt.`);

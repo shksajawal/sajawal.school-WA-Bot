@@ -451,3 +451,39 @@ export async function opsRangeStats(days: number): Promise<{
   );
   return res.rows[0];
 }
+
+/**
+ * Sample of today's WON (purchased) and LOST (went quiet after a bot reply)
+ * conversations for the nightly learning pass. Bodies truncated hard so the
+ * whole sample stays small.
+ */
+export async function learningSamples(): Promise<Array<{ label: string; convo: string }>> {
+  const pick = async (where: string, limit: number, label: string) => {
+    const res = await pool.query(
+      `SELECT c.id FROM contacts c
+       WHERE c.created_at > now() - interval '24 hours' AND ${where}
+       ORDER BY c.created_at DESC LIMIT ${limit}`,
+    );
+    const out: Array<{ label: string; convo: string }> = [];
+    for (const row of res.rows) {
+      const msgs = await pool.query(
+        `SELECT direction, body FROM messages
+         WHERE contact_id = $1 AND body IS NOT NULL
+         ORDER BY created_at DESC LIMIT 12`,
+        [row.id],
+      );
+      const lines = msgs.rows
+        .reverse()
+        .map((m: { direction: string; body: string }) => `${m.direction === "in" ? "Lead" : "Salman"}: ${String(m.body).slice(0, 180)}`);
+      if (lines.length >= 3) out.push({ label, convo: lines.join("\n") });
+    }
+    return out;
+  };
+  const won = await pick(`c.status = 'purchased'`, 4, "WON");
+  const lost = await pick(
+    `c.status = 'active' AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) < now() - interval '3 hours'`,
+    8,
+    "LOST",
+  );
+  return [...won, ...lost];
+}

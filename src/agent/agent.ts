@@ -130,7 +130,9 @@ export async function generateReply(
 
   const finalMessage = await client.beta.messages.toolRunner({
     model: config.anthropic.model,
-    max_tokens: 8192,
+    // Replies are capped at ~400 chars by the prompt; 1024 tokens is triple
+    // headroom (incl. tool calls) and hard-caps runaway output spend.
+    max_tokens: 1024,
     system: [
       {
         type: "text",
@@ -162,4 +164,25 @@ export async function generateReply(
     );
   }
   return text || null;
+}
+
+/**
+ * One-off analysis completion for the nightly learning pass (no tools, no
+ * customer context). Usage lands in the same token ledger as chat.
+ */
+export async function analyzeText(instruction: string, content: string): Promise<string | null> {
+  try {
+    const res = await client.messages.create({
+      model: config.anthropic.model,
+      max_tokens: 600,
+      system: instruction,
+      messages: [{ role: "user", content }],
+    });
+    await recordUsage({ kind: "learning", model: config.anthropic.model, usage: res.usage as any });
+    const block = res.content.find((b) => b.type === "text");
+    return block && block.type === "text" ? block.text : null;
+  } catch (err) {
+    console.error("Learning analysis failed:", err);
+    return null;
+  }
 }
