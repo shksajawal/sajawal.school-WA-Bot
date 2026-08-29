@@ -21,7 +21,7 @@ import {
 import { downloadMedia, markReadWithTyping, sendText, uploadMedia } from "../whatsapp.js";
 import { sendCapiEvent } from "../capi.js";
 import { verifyPaymentScreenshot } from "../payments.js";
-import { handleOpsMessage, isOpsNumber, pingTeam, pingTeamAudio } from "../ops.js";
+import { handleOpsMessage, isOpsNumber, pingSupport, pingTeam, pingTeamAudio } from "../ops.js";
 import { matchFaq } from "../faq.js";
 import { generateReply } from "../agent/agent.js";
 
@@ -108,7 +108,7 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
         : null;
     if (emailMatch) {
       await updateContact(contact.id, { email: emailMatch[0].toLowerCase() });
-      await pingTeam(`📧 Buyer email received — ${contact.name ?? "?"} (wa.me/${contact.wa_id}): ${emailMatch[0]}`);
+      await pingSupport(`📧 Buyer email received — ${contact.name ?? "?"} (wa.me/${contact.wa_id}): ${emailMatch[0]}`);
       await sendBotText(contact, `Email mil gaya ✅ (${emailMatch[0]}) — course ka login isi pe aayega.`);
       return;
     }
@@ -137,18 +137,18 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
       if (audioId) {
         const { buffer, mimeType } = await downloadMedia(audioId);
         const forwardId = await uploadMedia(buffer, mimeType);
-        await pingTeam(
+        await pingSupport(
           `\u{1F3A4} Voice note from ${contact.name ?? "?"} (wa.me/${contact.wa_id}) \u2014 bot stays silent on voice notes. Please listen (forwarded next) and reply to the customer from the support number.`,
         );
         await pingTeamAudio(forwardId);
       }
     } catch (err) {
       console.error("Voice note forward failed:", err);
-      await pingTeam(`\u{1F3A4} Voice note from wa.me/${contact.wa_id} could not be forwarded \u2014 please check the chat.`);
+      await pingSupport(`\u{1F3A4} Voice note from wa.me/${contact.wa_id} could not be forwarded \u2014 please check the chat.`);
     }
   } else {
     // Other media (video, documents, locations): no robot line — flag for a human.
-    await pingTeam(`\u{1F4CE} ${m.type} received from ${contact.name ?? "?"} (wa.me/${contact.wa_id}) \u2014 bot cannot read it; reply from the support number if it needs an answer.`);
+    await pingSupport(`\u{1F4CE} ${m.type} received from ${contact.name ?? "?"} (wa.me/${contact.wa_id}) \u2014 bot cannot read it; reply from the support number if it needs an answer.`);
   }
 }
 
@@ -209,7 +209,9 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
         contact,
         `Payment verified ✅ Welcome to Sajawal.School! 🎉\n\nAap ki enrollment confirm ho gayi hai. Agla qadam yahan hai — access aur classroom ki poori instructions is page pe hain:\n${thankYouUrl}\n\nAur apna email address yahan bhej dein — course ka login isi pe aayega.`,
       );
-      await alertOps(contact, `✅ Purchase verified: Rs ${check.amount} (ref ${check.reference ?? "n/a"})`);
+      await pingTeam(
+        `✅ SALE: Rs ${check.amount} (ref ${check.reference ?? "n/a"})\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})`,
+      );
     } else if (check.suspicious) {
       await updateContact(contact.id, { status: "payment_review" });
       await sendBotText(
@@ -357,7 +359,7 @@ async function sendBotText(contact: Contact, text: string): Promise<void> {
 }
 
 async function alertOps(contact: Contact, note: string): Promise<void> {
-  await pingTeam(`${note}\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})`);
+  await pingSupport(`${note}\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})`);
 }
 
 export function startInboundWorker(): Worker {

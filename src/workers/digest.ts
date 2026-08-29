@@ -1,28 +1,24 @@
 import {
-  funnelSummary,
   getState,
   opsActionItems,
-  salesSince,
+  opsDailyStats,
   setState,
   supportQueriesSince,
 } from "../db.js";
 import { pingTeam } from "../ops.js";
 
 /**
- * Rolling team brief.
- *
- * Replaces paid re-engagement templates: the bot never messages a cold lead
- * past the free 24h window. Instead the team gets a brief every couple of
- * hours — but ONLY when something new has happened since the last one, so
- * frequent updates never turn into noise the team learns to ignore.
- *
- * Cadence and quiet hours are env-tunable. State lives in Postgres, so the
- * frequent redeploys on this project can't double-send or skip a brief.
+ * Daily team report, owner's spec (2026-08-29):
+ * - ONE report at 23:00 PKT to both admin and support numbers, covering the
+ *   whole day: funnel numbers vs yesterday, what's good / what's bad, the
+ *   questions the bot could not handle (knowledge to feed), and Salman's
+ *   action list.
+ * - No rolling 2-hourly brief any more; urgent and big things ping in real
+ *   time from where they happen (sales, disputes, handoffs).
+ * - "update" sends the same report on demand. Weekly / till-date views exist
+ *   only on demand ("week" command), never pushed.
  */
-const INTERVAL_HOURS = Number(process.env.BRIEF_INTERVAL_HOURS ?? 2);
-const START_HOUR = Number(process.env.BRIEF_START_HOUR_PKT ?? 9);
-const END_HOUR = Number(process.env.BRIEF_END_HOUR_PKT ?? 23);
-const STATE_KEY = "last_team_brief_at";
+const STATE_KEY = "last_daily_report_date";
 
 function pktHour(): number {
   return Number(
@@ -30,90 +26,97 @@ function pktHour(): number {
   );
 }
 
-/** Builds and sends the brief if anything is new. Returns true when sent. */
-export async function sendTeamBrief(force = false): Promise<boolean> {
-  const raw = await getState(STATE_KEY);
-  const since = raw ? new Date(raw) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+function pktDateStr(): string {
+  return new Date().toLocaleDateString("en-GB", {
+    timeZone: "Asia/Karachi",
+    day: "2-digit",
+    month: "short",
+  });
+}
 
-  const [sales, queries, f, items] = await Promise.all([
-    salesSince(since),
-    supportQueriesSince(since),
-    funnelSummary(),
+function pktDayStartUtc(): Date {
+  const now = new Date();
+  const pkt = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Karachi" }));
+  const dayMs = pkt.getHours() * 3600_000 + pkt.getMinutes() * 60_000 + pkt.getSeconds() * 1000;
+  return new Date(now.getTime() - dayMs);
+}
+
+const pct = (a: number, b: number): string => (b > 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%");
+
+/** Builds and sends the daily report. Also used by the on-demand "update" command. */
+export async function sendTeamBrief(_force = false): Promise<boolean> {
+  const [s, queries, items] = await Promise.all([
+    opsDailyStats(),
+    supportQueriesSince(pktDayStartUtc()),
     opsActionItems(),
   ]);
 
-  const followUps = queries.filter((q) => q.summary.startsWith("Follow-up needed"));
-  const other = queries.filter((q) => !q.summary.startsWith("Follow-up needed"));
-
-  // Nothing new -> stay silent. This is what keeps a 2-hourly brief useful.
-  if (!force && sales.length === 0 && queries.length === 0) {
-    await setState(STATE_KEY, new Date().toISOString());
-    return false;
-  }
+  const convT = pct(s.sales_t, s.leads_t);
+  const convY = pct(s.sales_y, s.leads_y);
+  const rev = Number(s.rev_t ?? 0).toLocaleString();
+  const revY = Number(s.rev_y ?? 0).toLocaleString();
 
   const parts: string[] = [
-    `🔔 Update — ${f.sales_today} sale${f.sales_today === 1 ? "" : "s"} today (Rs ${Number(f.revenue_today ?? 0).toLocaleString()}) · ${f.payment_pending} at checkout · ${items.length} pending action${items.length === 1 ? "" : "s"}`,
+    `\u{1F4CA} Daily Report, ${pktDateStr()}\n` +
+      `Leads: ${s.leads_t} (kal ${s.leads_y})\n` +
+      `Payment stage: ${s.paystage_t} (kal ${s.paystage_y})\n` +
+      `Sales: ${s.sales_t} = Rs ${rev} (Core ${s.core_t} / Advance ${s.adv_t}), kal ${s.sales_y} = Rs ${revY}\n` +
+      `Lead to sale: ${convT} (kal ${convY})\n` +
+      `Tracking: ${s.capi_ok} events ok${s.capi_fail ? `, ${s.capi_fail} FAILED` : ""}`,
   ];
 
-  if (sales.length) {
+  // Auto insight lines: one good, one bad, derived from the day's numbers.
+  const good: string[] = [];
+  const bad: string[] = [];
+  if (s.leads_t > s.leads_y) good.push(`lead volume up (${s.leads_y} -> ${s.leads_t})`);
+  if (s.sales_t > s.sales_y) good.push(`sales up (${s.sales_y} -> ${s.sales_t})`);
+  if (s.sales_t < s.sales_y) bad.push(`sales down (${s.sales_y} -> ${s.sales_t})`);
+  if (s.paystage_t < s.paystage_y) bad.push(`fewer leads reaching payment (${s.paystage_y} -> ${s.paystage_t})`);
+  if (s.capi_fail > 0) bad.push(`${s.capi_fail} tracking events failed`);
+  if (good.length) parts.push(`\u{1F44D} Good: ${good.join("; ")}`);
+  if (bad.length) parts.push(`\u{26A0} Watch: ${bad.join("; ")}`);
+
+  // Questions the bot handed to humans today = knowledge gaps worth feeding.
+  const gaps = queries.filter((q) => !q.summary.startsWith("Follow-up needed")).slice(0, 6);
+  if (gaps.length) {
     parts.push(
-      `💰 NEW SALES (${sales.length})\n` +
-        sales
-          .map(
-            (r) =>
-              `• ${r.name ?? "?"} — Rs ${Number(r.amount ?? 0).toLocaleString()} (ref ${r.reference ?? "?"})\n  Email: ${r.email ?? "❌ ask in chat"}\n  wa.me/${r.wa_id}`,
-          )
-          .join("\n"),
+      `\u{1F534} Bot needed human help today (feed answers if repeating):\n` +
+        gaps.map((q) => `• ${q.name ?? "?"}: ${q.summary.slice(0, 90)}`).join("\n"),
     );
   }
 
-  if (followUps.length) {
+  // Salman's action list: pending items with instant links.
+  if (items.length) {
     parts.push(
-      `📞 MESSAGE THESE (bot can't — 24h+ quiet) — ${followUps.length}\n` +
-        followUps
-          .map(
-            (q) =>
-              `• ${q.name ?? "?"} — ${q.summary.replace("Follow-up needed (quiet 24h+). ", "")}\n  wa.me/${q.wa_id}`,
-          )
-          .join("\n"),
+      `✅ Salman action items (${items.length}):\n` +
+        items
+          .slice(0, 8)
+          .map((i) => `• ${i.name ?? "?"}: ${i.note}\n  wa.me/${i.wa_id}`)
+          .join("\n") +
+        (items.length > 8 ? `\n(+${items.length - 8} more, reply "leads")` : ""),
     );
   }
 
-  if (other.length) {
-    parts.push(
-      `📨 SUPPORT (${other.length})\n` +
-        other.map((q) => `• ${q.name ?? "?"}: ${q.summary}\n  wa.me/${q.wa_id}`).join("\n"),
-    );
-  }
-
-  parts.push(`Reply "leads" or "sales" any time for the full list.`);
+  parts.push(`Reply "sales", "leads", "cost" ya "update" kisi bhi waqt.`);
 
   await pingTeam(parts.join("\n\n"));
-  await setState(STATE_KEY, new Date().toISOString());
+  await setState(STATE_KEY, pktDateStr());
   return true;
 }
 
-/**
- * Checks every 10 minutes: inside working hours, and at least INTERVAL_HOURS
- * since the last brief, send one if there is anything new.
- */
+/** Fires the daily report once, at or after 23:00 PKT, exactly once per PKT day. */
 export function startBriefScheduler(): NodeJS.Timeout {
   const tick = async () => {
     try {
-      const hour = pktHour();
-      if (hour < START_HOUR || hour >= END_HOUR) return;
-
-      const raw = await getState(STATE_KEY);
-      if (raw) {
-        const elapsedH = (Date.now() - new Date(raw).getTime()) / 3_600_000;
-        if (elapsedH < INTERVAL_HOURS) return;
-      }
-      const sent = await sendTeamBrief();
-      if (sent) console.log("Team brief sent");
+      if (pktHour() < 23) return;
+      const last = await getState(STATE_KEY);
+      if (last === pktDateStr()) return;
+      await sendTeamBrief();
+      console.log("Daily report sent");
     } catch (err) {
-      console.error("Team brief failed:", err);
+      console.error("Daily report failed:", err);
     }
   };
   void tick();
-  return setInterval(tick, 10 * 60 * 1000);
+  return setInterval(tick, 5 * 60 * 1000);
 }

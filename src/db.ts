@@ -403,3 +403,51 @@ export async function usageByDay(days = 7): Promise<UsageDay[]> {
   }
   return [...byDay.values()];
 }
+
+/** One-row stats pack for the 11pm PKT daily report (today vs yesterday, PKT days). */
+export interface OpsDailyStats {
+  leads_t: number; leads_y: number;
+  paystage_t: number; paystage_y: number;
+  sales_t: number; sales_y: number;
+  rev_t: string | null; rev_y: string | null;
+  core_t: number; adv_t: number;
+  capi_ok: number; capi_fail: number;
+}
+export async function opsDailyStats(): Promise<OpsDailyStats> {
+  const res = await pool.query(
+    `WITH b AS (
+       SELECT (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi') AS t0,
+              (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi') - interval '1 day' AS y0
+     )
+     SELECT
+       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.t0) AS leads_t,
+       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.y0 AND created_at < b.t0) AS leads_y,
+       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.t0 AND status IN ('payment_pending','payment_review','purchased')) AS paystage_t,
+       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.y0 AND created_at < b.t0 AND status IN ('payment_pending','payment_review','purchased')) AS paystage_y,
+       (SELECT count(*)::int FROM payments, b WHERE verified AND created_at >= b.t0) AS sales_t,
+       (SELECT count(*)::int FROM payments, b WHERE verified AND created_at >= b.y0 AND created_at < b.t0) AS sales_y,
+       (SELECT sum(amount)::text FROM payments, b WHERE verified AND created_at >= b.t0) AS rev_t,
+       (SELECT sum(amount)::text FROM payments, b WHERE verified AND created_at >= b.y0 AND created_at < b.t0) AS rev_y,
+       (SELECT count(*)::int FROM payments, b WHERE verified AND created_at >= b.t0 AND amount < 8000) AS core_t,
+       (SELECT count(*)::int FROM payments, b WHERE verified AND created_at >= b.t0 AND amount >= 8000) AS adv_t,
+       (SELECT count(*)::int FROM capi_events, b WHERE created_at >= b.t0 AND success) AS capi_ok,
+       (SELECT count(*)::int FROM capi_events, b WHERE created_at >= b.t0 AND NOT success) AS capi_fail`,
+  );
+  return res.rows[0];
+}
+
+/** Generic range stats for on-demand "week" / "all" ops commands. */
+export async function opsRangeStats(days: number): Promise<{
+  leads: number; paystage: number; sales: number; revenue: string | null;
+}> {
+  const res = await pool.query(
+    `SELECT
+       (SELECT count(*)::int FROM contacts WHERE created_at > now() - ($1 || ' days')::interval) AS leads,
+       (SELECT count(*)::int FROM contacts WHERE created_at > now() - ($1 || ' days')::interval
+          AND status IN ('payment_pending','payment_review','purchased')) AS paystage,
+       (SELECT count(*)::int FROM payments WHERE verified AND created_at > now() - ($1 || ' days')::interval) AS sales,
+       (SELECT sum(amount)::text FROM payments WHERE verified AND created_at > now() - ($1 || ' days')::interval) AS revenue`,
+    [days],
+  );
+  return res.rows[0];
+}

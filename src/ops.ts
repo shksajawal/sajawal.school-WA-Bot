@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import { sendImage, sendAudio, sendText, uploadMedia } from "./whatsapp.js";
-import { contactByWaId, funnelSummary, getRecentMessages, openSupportQueries, opsActionItems, paymentScreenshot, recentSales } from "./db.js";
+import { contactByWaId, funnelSummary, getRecentMessages, openSupportQueries, opsActionItems, opsRangeStats, paymentScreenshot, recentSales } from "./db.js";
 import { sendTeamBrief } from "./workers/digest.js";
 import { usageByDay } from "./db.js";
 
@@ -29,16 +29,37 @@ const fmtPKT = (d: Date | string | null): string =>
  * 24h window is closed the send just fails — the "leads" report is the backstop,
  * and any team message to the bot reopens their window.
  */
-/** Broadcast a forwarded voice note to the team, same recipients as pingTeam. */
-export async function pingTeamAudio(mediaId: string): Promise<void> {
-  const targets = [
-    ...new Set(
-      [config.ops.supportNumber, config.ops.adminNumber, config.opsAlertNumber].filter(
-        (n): n is string => Boolean(n),
-      ),
+const supportTargets = (): string[] => [
+  ...new Set(
+    [config.ops.supportNumber, config.opsAlertNumber].filter((n): n is string => Boolean(n)),
+  ),
+];
+
+const allTargets = (): string[] => [
+  ...new Set(
+    [config.ops.supportNumber, config.ops.adminNumber, config.opsAlertNumber].filter(
+      (n): n is string => Boolean(n),
     ),
-  ];
-  for (const to of targets) {
+  ),
+];
+
+/**
+ * Lead-level operational ping: goes to the SUPPORT number only (owner's spec
+ * 2026-08-29: admin gets the daily report and big news, not per-lead chatter).
+ */
+export async function pingSupport(note: string): Promise<void> {
+  for (const to of supportTargets()) {
+    try {
+      await sendText(to, note);
+    } catch (err) {
+      console.error("Support ping failed (window likely closed):", err);
+    }
+  }
+}
+
+/** Voice notes are lead-level work: forwarded to the support number only. */
+export async function pingTeamAudio(mediaId: string): Promise<void> {
+  for (const to of supportTargets()) {
     try {
       await sendAudio(to, mediaId);
     } catch (err) {
@@ -47,15 +68,9 @@ export async function pingTeamAudio(mediaId: string): Promise<void> {
   }
 }
 
+/** Big news for everyone: sales, the daily report, anything the owner should see. */
 export async function pingTeam(note: string): Promise<void> {
-  const targets = [
-    ...new Set(
-      [config.ops.supportNumber, config.ops.adminNumber, config.opsAlertNumber].filter(
-        (n): n is string => Boolean(n),
-      ),
-    ),
-  ];
-  for (const to of targets) {
+  for (const to of allTargets()) {
     try {
       await sendText(to, note);
     } catch (err) {
@@ -77,6 +92,8 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
     if (/chat|history|transcript/.test(t) && num.length >= 10) await replyChat(from, num);
     else if (num.length >= 11 && num.length <= 15 && /^\d+$/.test(t.replace(/[\s+-]/g, ""))) await replyChat(from, num);
     else if (/cost|spend|usage|api|credit/.test(t)) await replyCost(from);
+    else if (/week|hafta|7 ?d/.test(t)) await replyRange(from, 7, "Last 7 days");
+    else if (/\ball\b|total|till date|overall|abtak|ab tak/.test(t)) await replyAllTime(from);
     else if (/update|brief|latest|abhi|now/.test(t)) await sendTeamBrief(true);
     else if (/sale|sold|revenue|payment|paisa/.test(t)) await replySales(from);
     else if (/lead|pending|action|follow|kaam/.test(t)) await replyLeads(from);
@@ -186,5 +203,25 @@ async function replyHelp(to: string): Promise<void> {
   await sendText(
     to,
     `Commands:\n\n"sales" — verified sales from the last 7 days, with screenshots\n"leads" — everyone needing action (payment reviews, incomplete checkouts, silent hot leads)\n"update" — what\u2019s new since the last brief\na phone number — that customer` + "\u2019" + `s recent chat transcript\nanything else — today` + "\u2019" + `s summary\n\nThis interface is read-only — nothing can be changed or deleted from here.`,
+  );
+}
+
+
+/** On-demand range summary: "week" -> last 7 days. Never pushed automatically. */
+async function replyRange(to: string, days: number, label: string): Promise<void> {
+  const r = await opsRangeStats(days);
+  const conv = r.leads > 0 ? ((r.sales / r.leads) * 100).toFixed(1) + "%" : "0%";
+  await sendText(
+    to,
+    `\u{1F4C8} ${label}\nLeads: ${r.leads}\nPayment stage: ${r.paystage}\nSales: ${r.sales} = Rs ${Number(r.revenue ?? 0).toLocaleString()}\nLead to sale: ${conv}`,
+  );
+}
+
+/** On-demand till-date totals. Never pushed automatically. */
+async function replyAllTime(to: string): Promise<void> {
+  const f = await funnelSummary();
+  await sendText(
+    to,
+    `\u{1F4C8} Till date\nLeads: ${f.contacts} (${f.from_ads} from ads)\nQualified: ${f.qualified}\nSales: ${f.purchases} = Rs ${Number(f.revenue ?? 0).toLocaleString()}`,
   );
 }

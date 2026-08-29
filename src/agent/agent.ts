@@ -5,7 +5,7 @@ import { config } from "../config.js";
 import { sendCapiEvent } from "../capi.js";
 import { insertSupportQuery, recordUsage, type Contact, type StoredMessage, updateContact } from "../db.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
-import { pingTeam } from "../ops.js";
+import { pingSupport } from "../ops.js";
 
 const client = new Anthropic();
 
@@ -34,7 +34,7 @@ function buildTools(contact: Contact) {
       await updateContact(contact.id, { qualified: true });
       contact.qualified = true;
       await sendCapiEvent(contact, "QualifiedLead");
-      await pingTeam(
+      await pingSupport(
         `🟢 Qualified lead — ${contact.name ?? "?"} (wa.me/${contact.wa_id})\n${input.reason}`,
       );
       return "Qualified lead recorded.";
@@ -58,7 +58,7 @@ function buildTools(contact: Contact) {
         value: input.expected_amount_pkr,
         eventId: `initiatecheckout:${contact.id}`,
       });
-      await pingTeam(
+      await pingSupport(
         `🛒 Checkout started — Rs ${input.expected_amount_pkr.toLocaleString()} (${input.program})\n${contact.name ?? "?"} (wa.me/${contact.wa_id}) — bank details sent`,
       );
       return `Bank details to include in your reply:\n${config.payment.bankDetails}`;
@@ -80,7 +80,7 @@ function buildTools(contact: Contact) {
         // A DB hiccup must never kill the customer's reply mid-conversation
         console.error("payment_review status update failed:", err);
       }
-      await pingTeam(
+      await pingSupport(
         `🚨 Payment dispute\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nReason: ${input.reason}`,
       );
       return "Payment team has been alerted and will confirm in this chat. Keep helping the customer with everything else — do not go silent.";
@@ -101,7 +101,7 @@ function buildTools(contact: Contact) {
         // Queue insert failing must not break the reply — the ping still goes out
         console.error("support_queue insert failed:", err);
       }
-      await pingTeam(
+      await pingSupport(
         `📨 Support query\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})\nIssue: ${input.summary}`,
       );
       return "Forwarded to the human support team — they have the summary and the customer's contact. Tell the customer it's been forwarded and they'll be contacted shortly, and that you're here for any other questions meanwhile.";
