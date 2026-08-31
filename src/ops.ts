@@ -89,16 +89,20 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
   const t = text.trim().toLowerCase();
   try {
     const num = t.replace(/[^0-9]/g, "");
-    if (/chat|history|transcript/.test(t) && num.length >= 10) await replyChat(from, num);
+    // Commands must be deliberate: a short message that STARTS with the
+    // command word. A keyword buried in a normal sentence is not a command —
+    // that was dumping 7-day sales reports on the owner uninvited.
+    const isCmd = (re: RegExp): boolean => t.length <= 30 && re.test(t);
+    if (/^(chat|history|transcript)\b/.test(t) && num.length >= 10) await replyChat(from, num);
     else if (num.length >= 11 && num.length <= 15 && /^\d+$/.test(t.replace(/[\s+-]/g, ""))) await replyChat(from, num);
-    else if (/cost|spend|usage|api|credit/.test(t)) await replyCost(from);
-    else if (/week|hafta|7 ?d/.test(t)) await replyRange(from, 7, "Last 7 days");
-    else if (/\ball\b|total|till date|overall|abtak|ab tak/.test(t)) await replyAllTime(from);
-    else if (/update|brief|latest|abhi|now/.test(t)) await sendTeamBrief(true);
-    else if (/sale|sold|revenue|payment|paisa/.test(t)) await replySales(from);
-    else if (/lead|pending|action|follow|kaam/.test(t)) await replyLeads(from);
-    else if (/help|command|option/.test(t)) await replyHelp(from);
-    else await replyDigest(from);
+    else if (isCmd(/^(cost|spend|usage|api)/)) await replyCost(from);
+    else if (isCmd(/^(week|hafta|7 ?d)/)) await replyRange(from, 7, "Last 7 days");
+    else if (isCmd(/^(all|total|till ?date|overall)/)) await replyAllTime(from);
+    else if (isCmd(/^(update|brief|report|latest|abhi)/)) await sendTeamBrief(true);
+    else if (isCmd(/^(sales?|sold|revenue)/)) await replySales(from);
+    else if (isCmd(/^(leads?|pending|actions?|follow)/)) await replyLeads(from);
+    else if (isCmd(/^(summary|digest|stats)/)) await replyDigest(from);
+    else await replyHelp(from);
   } catch (err) {
     console.error("Ops reply failed:", err);
     try {
@@ -202,7 +206,7 @@ async function replyDigest(to: string): Promise<void> {
 async function replyHelp(to: string): Promise<void> {
   await sendText(
     to,
-    `Commands:\n\n"sales" — verified sales from the last 7 days, with screenshots\n"leads" — everyone needing action (payment reviews, incomplete checkouts, silent hot leads)\n"update" — what\u2019s new since the last brief\na phone number — that customer` + "\u2019" + `s recent chat transcript\nanything else — today` + "\u2019" + `s summary\n\nThis interface is read-only — nothing can be changed or deleted from here.`,
+    `Commands (message must start with the word):\n\n"update" - today\'s full report\n"sales" - last 7 days sales with screenshots\n"leads" - everyone needing action\n"cost" - API spend\n"week" - 7 day summary\n"all" - till-date totals\na phone number - that customer\'s chat\n\nRead-only - nothing can be changed from here.`,
   );
 }
 
