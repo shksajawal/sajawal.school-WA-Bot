@@ -54,6 +54,15 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
     return;
   }
 
+  // Native list/button replies (interactive messages) behave exactly like
+  // typed text: a menu row with id "menu_2" arrives as the text "2".
+  if (m.type === "interactive") {
+    const ir = (m as any).interactive;
+    const sel = ir?.list_reply ?? ir?.button_reply;
+    const mapped = sel?.id?.startsWith?.("menu_") ? sel.id.slice(5) : (sel?.title ?? "");
+    m = { ...m, type: "text", text: { body: String(mapped) } };
+  }
+
   const profileName = value.contacts?.find((c) => c.wa_id === m.from)?.profile?.name ?? null;
 
   const contact = await upsertContact({
@@ -341,9 +350,14 @@ async function runDrip(contact: Contact, body: string): Promise<boolean> {
 async function armFollowup(contact: Contact): Promise<void> {
   if (contact.status === "purchased" || contact.status === "payment_review") return;
   try {
+    // Owner's rule 2026-09-05: a lead holding payment details gets chased at
+    // 60 minutes (payers pay within the hour; after that they cool fast).
+    // Everyone else keeps the gentler first-touch delay.
+    const delay =
+      contact.status === "payment_pending" ? 60 * 60 * 1000 : config.followup.firstDelayMs;
     await scheduleFollowup(
       { contactId: contact.id, touch: 1, lastUserMsgAt: new Date().toISOString() },
-      config.followup.firstDelayMs,
+      delay,
     );
   } catch (err) {
     console.error("Failed to arm follow-up:", err);
@@ -402,7 +416,7 @@ export function startReplyWorker(): Worker {
             touch: 1,
             lastUserMsgAt: new Date(contact.last_user_msg_at).toISOString(),
           },
-          config.followup.firstDelayMs,
+          contact.status === "payment_pending" ? 60 * 60 * 1000 : config.followup.firstDelayMs,
         );
       }
     },

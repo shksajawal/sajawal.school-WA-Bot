@@ -43,7 +43,10 @@ export async function enqueueReply(job: ReplyJob): Promise<void> {
 export async function scheduleFollowup(job: FollowupJob, delayMs: number): Promise<void> {
   await followupQueue.add("followup", job, {
     delay: delayMs,
-    jobId: `fu:${job.contactId}:${job.touch}:${job.lastUserMsgAt}`,
+    // BullMQ rejects custom ids containing ":" — the ISO timestamp in the old
+    // id made EVERY followup add throw (silently caught upstream), so no
+    // follow-up ever fired before 2026-09-05. Digits only now.
+    jobId: `fu-${job.contactId}-${job.touch}-${Date.parse(job.lastUserMsgAt)}`,
     removeOnComplete: 1000,
     removeOnFail: 5000,
   });
