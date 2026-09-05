@@ -119,6 +119,25 @@ export async function sendListMessage(
   return json.messages?.[0]?.id ??  null;
 }
 
+/** Interactive reply buttons: up to 3, shown directly under the message. */
+export async function sendButtonsMessage(
+  to: string,
+  body: string,
+  buttons: Array<{ id: string; title: string }>,
+): Promise<string | null> {
+  const json = await graphPost(`${config.whatsapp.phoneNumberId}/messages`, {
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: { text: body },
+      action: { buttons: buttons.map((b) => ({ type: "reply", reply: b })) },
+    },
+  });
+  return json.messages?.[0]?.id ?? null;
+}
+
 /** Send an audio message by media id (voice notes forwarded to the team). */
 export async function sendAudio(to: string, mediaId: string): Promise<string | null> {
   const json = await graphPost(`${config.whatsapp.phoneNumberId}/messages`, {

@@ -19,7 +19,7 @@ import {
   verifiedReferenceExists,
   type Contact,
 } from "../db.js";
-import { downloadMedia, markReadWithTyping, sendListMessage, sendText, uploadMedia } from "../whatsapp.js";
+import { downloadMedia, markReadWithTyping, sendButtonsMessage, sendText, uploadMedia } from "../whatsapp.js";
 import { sendCapiEvent } from "../capi.js";
 import { verifyPaymentScreenshot } from "../payments.js";
 import { handleOpsMessage, isOpsNumber, pingSupport, pingTeam, pingTeamAudio } from "../ops.js";
@@ -272,7 +272,7 @@ async function handlePaymentScreenshot(contact: Contact, mediaId: string, mimeTy
 // lead replies with a number and Claude pitches to that segment. Only edit
 // this text on the owner's explicit instruction.
 const OPENER =
-  "Salam! \u{1F44B} Sajawal.School se Salman baat kar raha hoon.\n\nHum Pakistan ki sab se bari digital marketing community hain, 67,000+ students. Yahan sirf course nahi milta, zero se le kar apna kaam ya clients tak ka poora system milta hai, har step k lie practical knowledge, guidance, live sessions aur ek aisi community jahan roz koi na koi apni pehli sale ya pehla client share karta hai.\n\nAap kis stage pe hain, taake main sahi guide kar sakoon:\n1. Bilkul zero se seekhna hai\n2. Freelancing kar rahe hain, clients/income barhani hai\n3. Apna business hai, ads khud chalani hain\n4. Abhi clear nahi ke kya karna chahiye\n\nBas number reply karein. Zyada tar log hamara Advance plan lete hain, lekin aapke liye kya sahi hai wo aapke jawab pe depend karta hai \u{1F642}";
+  "Salam! \u{1F44B} Sajawal.School se Salman baat kar raha hoon.\n\nHum Pakistan ki sab se bari digital marketing community hain, 67,000+ students. Yahan sirf course nahi milta, zero se le kar apna kaam ya clients tak ka poora system milta hai, har step k lie practical knowledge, guidance, live sessions aur ek aisi community jahan roz koi na koi apni pehli sale ya pehla client share karta hai.\n\nAap kis stage pe hain, taake main sahi guide kar sakoon:\n1. Bilkul zero se seekhna hai\n2. Freelancing kar rahe hain, clients/income barhani hai\n3. Apna business hai, ads khud chalani hain\n\nBas number reply karein. Zyada tar log hamara Advance plan lete hain, lekin aapke liye kya sahi hai wo aapke jawab pe depend karta hai \u{1F642}";
 
 // Owner-approved segment replies (2026-08-29), played verbatim when a lead
 // answers the opener menu with a bare 1-4. Zero model cost. Only edit these
@@ -305,13 +305,6 @@ const MENU_REPLIES: Record<string, string> = {
     MENU_WEBSITE_LINE,
     "Jab ready hon batayein, payment details bhej deta hoon. Koi bhi sawal ho to seedha poochein \u{1F642}",
   ].join("\n\n"),
-  "4": [
-    "Koi masla nahi, bohat log yahin se start karte hain. Yahan aapko saari options aur unki direction samajh aa jati hai, to aap confuse hone ke bajaye apna raasta confidence se choose karte hain.",
-    `Aapke liye Advance plan recommended ha. ${MENU_CORE_FALLBACK}`,
-    MENU_PRICES_LINE,
-    MENU_WEBSITE_LINE,
-    "Start karna chahein to batayein, main payment details bhej deta hoon \u{1F642}",
-  ].join("\n\n"),
 };
 
 // Tap-menu version of the opener (owner-approved 2026-09-05). Same words;
@@ -319,26 +312,23 @@ const MENU_REPLIES: Record<string, string> = {
 // and are parsed back into "N" by the interactive handler upstream.
 const OPENER_MENU_BODY =
   "Salam! \u{1F44B} Sajawal.School se Salman baat kar raha hoon.\n\nHum Pakistan ki sab se bari digital marketing community hain, 67,000+ students. Yahan sirf course nahi milta, zero se le kar apna kaam ya clients tak ka poora system milta hai, har step k lie practical knowledge, guidance, live sessions aur ek aisi community jahan roz koi na koi apni pehli sale ya pehla client share karta hai.\n\nAap kis stage pe hain? Neeche se select karein, taake main sahi guide kar sakoon \u{1F642}\n\nZyada tar log hamara Advance plan lete hain, lekin aapke liye kya sahi hai wo aapke jawab pe depend karta hai.";
-const OPENER_MENU_ROWS = [
-  { id: "menu_1", title: "Beginner", description: "Zero se seekhna hai" },
-  { id: "menu_2", title: "Freelancer hoon", description: "Clients/income barhani hai" },
-  { id: "menu_3", title: "Business owner hoon", description: "Apne ads khud chalanay hain" },
-  { id: "menu_4", title: "Abhi clear nahi ha", description: "Roadmap, guidance or learning chahie ha" },
+// WhatsApp shows at most 3 reply buttons inline; the "not sure" option was
+// removed on the owner's call (2026-09-05) — unclear leads simply type, and
+// Claude diagnoses and guides them.
+const OPENER_BUTTONS = [
+  { id: "menu_1", title: "Beginner" },
+  { id: "menu_2", title: "Freelancer hoon" },
+  { id: "menu_3", title: "Business owner hoon" },
 ];
 
 async function sendOpenerMenu(contact: Contact): Promise<void> {
   try {
-    const waMsgId = await sendListMessage(
-      contact.wa_id,
-      OPENER_MENU_BODY,
-      "Stage choose karein",
-      OPENER_MENU_ROWS,
-    );
+    const waMsgId = await sendButtonsMessage(contact.wa_id, OPENER_MENU_BODY, OPENER_BUTTONS);
     await insertMessage({
       contactId: contact.id,
       waMessageId: waMsgId,
       direction: "out",
-      body: OPENER_MENU_BODY + "\n[menu: 1 zero se / 2 freelancer / 3 business / 4 clear nahi]",
+      body: OPENER_MENU_BODY + "\n[buttons: Beginner / Freelancer hoon / Business owner hoon]",
     });
   } catch (err) {
     // Any interactive-send hiccup falls back to the plain numbered opener.
@@ -357,7 +347,7 @@ async function runDrip(contact: Contact, body: string): Promise<boolean> {
     // covers it) and falls to Claude (debounced) otherwise.
     const won = await claimDripStep(contact.id, 5, -1);
     contact.drip_step = -1;
-    const pick = text.match(/^([1-4])[).\s]*$/)?.[1];
+    const pick = text.match(/^([1-3])[).\s]*$/)?.[1];
     if (!pick) return false;
     if (!won) return true;
     await sendBotText(contact, MENU_REPLIES[pick]);
