@@ -13,6 +13,7 @@ import {
   insertMessage,
   insertPayment,
   latestInboundMessageId,
+  claimDripStep,
   updateContact,
   upsertContact,
   verifiedReferenceExists,
@@ -318,10 +319,14 @@ async function runDrip(contact: Contact, body: string): Promise<boolean> {
   // The opener's stage menu is pending: a bare 1-4 plays the owner's scripted
   // segment reply; anything else hands the lead to Claude with full history.
   if (contact.drip_step === 5) {
-    await updateContact(contact.id, { drip_step: -1 });
+    // Atomic claim: with two rapid messages in parallel, only one job may
+    // resolve the menu. The loser stays quiet for a pick (the winner's reply
+    // covers it) and falls to Claude (debounced) otherwise.
+    const won = await claimDripStep(contact.id, 5, -1);
     contact.drip_step = -1;
     const pick = text.match(/^([1-4])[).\s]*$/)?.[1];
     if (!pick) return false;
+    if (!won) return true;
     await sendBotText(contact, MENU_REPLIES[pick]);
     await armFollowup(contact);
     return true;
@@ -334,10 +339,11 @@ async function runDrip(contact: Contact, body: string): Promise<boolean> {
   }
   if (contact.drip_step !== 0) return false;
   // Owner's rule (2026-08-30): EVERY new lead gets the opener first, no smart
-  // skips. It carries the summary and both prices, so it answers nearly any
-  // first message; whatever it doesn't answer, they'll ask next.
-  await updateContact(contact.id, { drip_step: 5 });
+  // skips. Atomic claim: rapid-fire first messages race here, and exactly one
+  // may send the opener; the rest say nothing (the opener answers them all).
+  const won = await claimDripStep(contact.id, 0, 5);
   contact.drip_step = 5;
+  if (!won) return true;
   await sendBotText(contact, OPENER);
   await armFollowup(contact);
   return true;

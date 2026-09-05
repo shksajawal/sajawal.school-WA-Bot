@@ -502,3 +502,17 @@ export async function followupsSentToday(): Promise<{ nudges: number; reminders:
   );
   return res.rows[0];
 }
+
+
+/**
+ * Atomically claim a drip-step transition. Two webhook jobs processing a
+ * lead's rapid-fire first messages in parallel both used to see step 0 and
+ * both sent the opener; only the row-level winner may send now.
+ */
+export async function claimDripStep(id: number, from: number, to: number): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE contacts SET drip_step = $3 WHERE id = $1 AND drip_step = $2 RETURNING id`,
+    [id, from, to],
+  );
+  return (res.rowCount ?? 0) > 0;
+}
