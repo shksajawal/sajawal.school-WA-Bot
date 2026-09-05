@@ -287,7 +287,7 @@ const MENU_REPLIES: Record<string, string> = {
   // 9 Advance sales; the Advance-first pitch was this segment's #1 chat killer).
   "1": [
     "Perfect. Hamare 70% students bilkul zero se start karte hain, aur yahin se grow karte hain, to ye aapke liye sab se best starting point hai.",
-    "Zero se start ke liye Core plan Rs 3,900 best hai: saari basics strong hoti hain aur aap online skills pe kaam shuru kar dete hain, lifetime access ke sath. Aur jab aap ready hon to Advance (Rs 8,700) mein ads, client acquisition aur live sessions ka poora system hai, wo option hamesha khula hai.",
+    "Zero se start ke liye Core plan Rs 3,900 best hai: saari basics strong hoti hain aur aap online skills pe kaam shuru kar dete hain, lifetime access ke sath. Aur agar ap basic k sath sath sab advance trainings or live sessions bhe chahtay hen to beshak Advance plan (Rs 8,700) bhe join kr skte hen.",
     MENU_WEBSITE_LINE,
     "Start karna chahein to batayein, main payment details bhej deta hoon \u{1F642}",
   ].join("\n\n"),
