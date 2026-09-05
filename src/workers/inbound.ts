@@ -320,10 +320,10 @@ const MENU_REPLIES: Record<string, string> = {
 const OPENER_MENU_BODY =
   "Salam! \u{1F44B} Sajawal.School se Salman baat kar raha hoon.\n\nHum Pakistan ki sab se bari digital marketing community hain, 67,000+ students. Yahan sirf course nahi milta, zero se le kar apna kaam ya clients tak ka poora system milta hai, har step k lie practical knowledge, guidance, live sessions aur ek aisi community jahan roz koi na koi apni pehli sale ya pehla client share karta hai.\n\nAap kis stage pe hain? Neeche se select karein, taake main sahi guide kar sakoon \u{1F642}\n\nZyada tar log hamara Advance plan lete hain, lekin aapke liye kya sahi hai wo aapke jawab pe depend karta hai.";
 const OPENER_MENU_ROWS = [
-  { id: "menu_1", title: "Bilkul zero se", description: "Zero se seekhna hai" },
+  { id: "menu_1", title: "Beginner", description: "Zero se seekhna hai" },
   { id: "menu_2", title: "Freelancer hoon", description: "Clients/income barhani hai" },
-  { id: "menu_3", title: "Business owner hoon", description: "Apni ads khud chalani hain" },
-  { id: "menu_4", title: "Abhi clear nahi", description: "Mujhe guide kar dein" },
+  { id: "menu_3", title: "Business owner hoon", description: "Apne ads khud chalanay hain" },
+  { id: "menu_4", title: "Abhi clear nahi ha", description: "Roadmap, guidance or learning chahie ha" },
 ];
 
 async function sendOpenerMenu(contact: Contact): Promise<void> {
