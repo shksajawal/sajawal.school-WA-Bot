@@ -1,4 +1,5 @@
 import {
+  followupsSentToday,
   getState,
   learningSamples,
   opsActionItems,
@@ -75,6 +76,17 @@ export async function sendTeamBrief(_force = false): Promise<boolean> {
   if (s.sales_t < s.sales_y) bad.push(`sales down (${s.sales_y} -> ${s.sales_t})`);
   if (s.paystage_t < s.paystage_y) bad.push(`fewer leads reaching payment (${s.paystage_y} -> ${s.paystage_t})`);
   if (s.capi_fail > 0) bad.push(`${s.capi_fail} tracking events failed`);
+  // Tripwire: follow-ups claiming to work is not the same as follow-ups
+  // delivered. Zero sends on a day with real lead volume is an alarm.
+  try {
+    const fu = await followupsSentToday();
+    parts[0] += `\nFollow-ups sent: ${fu.nudges} nudges, ${fu.reminders} reminders`;
+    if (fu.nudges + fu.reminders === 0 && s.leads_t > 50) {
+      bad.push("ZERO follow-ups delivered today - follow-up system may be broken, tell Claude");
+    }
+  } catch (err) {
+    console.error("followup tripwire failed:", err);
+  }
   if (good.length) parts.push(`\u{1F44D} Good: ${good.join("; ")}`);
   if (bad.length) parts.push(`\u{26A0} Watch: ${bad.join("; ")}`);
 

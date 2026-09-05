@@ -487,3 +487,18 @@ export async function learningSamples(): Promise<Array<{ label: string; convo: s
   );
   return [...won, ...lost];
 }
+
+
+/** Count of follow-up touches actually delivered today (PKT) — the tripwire
+ * that would have caught the silent jobId bug on day one. */
+export async function followupsSentToday(): Promise<{ nudges: number; reminders: number }> {
+  const res = await pool.query(
+    `WITH b AS (SELECT (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi') AS t0)
+     SELECT
+       (SELECT count(*)::int FROM messages, b WHERE direction='out' AND created_at >= b.t0
+          AND (body LIKE 'Anything I can answer%' OR body LIKE 'Thought to check%')) AS nudges,
+       (SELECT count(*)::int FROM messages, b WHERE direction='out' AND created_at >= b.t0
+          AND body LIKE 'Last Reminder%') AS reminders`,
+  );
+  return res.rows[0];
+}
