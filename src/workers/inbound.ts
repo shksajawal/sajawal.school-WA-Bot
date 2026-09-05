@@ -316,9 +316,9 @@ const OPENER_MENU_BODY =
 // removed on the owner's call (2026-09-05) — unclear leads simply type, and
 // Claude diagnoses and guides them.
 const OPENER_BUTTONS = [
-  { id: "menu_1", title: "Beginner/Direction" },
-  { id: "menu_2", title: "Freelancer hoon" },
-  { id: "menu_3", title: "Business owner hoon" },
+  { id: "menu_1", title: "Beginner/From Zero" },
+  { id: "menu_2", title: "Freelancer/Know how" },
+  { id: "menu_3", title: "Business Owner" },
 ];
 
 async function sendOpenerMenu(contact: Contact): Promise<void> {
