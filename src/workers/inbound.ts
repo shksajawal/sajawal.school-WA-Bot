@@ -282,10 +282,11 @@ const MENU_PRICES_LINE = "Advance Rs 8,700, Core Rs 3,900, dono lifetime access.
 const MENU_CORE_FALLBACK =
   "Agar ap ko saray advance modules filhal ni chaien or sirf basics strong krna chahtay hen to core plan join kr skte hen.";
 const MENU_REPLIES: Record<string, string> = {
+  // Core-first for beginners (owner's data-driven call, 2026-09-05: 45 Core vs
+  // 9 Advance sales; the Advance-first pitch was this segment's #1 chat killer).
   "1": [
     "Perfect. Hamare 70% students bilkul zero se start karte hain, aur yahin se grow karte hain, to ye aapke liye sab se best starting point hai.",
-    `Zero walon ko main seedha Advance plan recommend karta hoon: basics se le kar ads aur clients tak sara path, plus live sessions. ${MENU_CORE_FALLBACK}`,
-    MENU_PRICES_LINE,
+    "Zero se start ke liye Core plan Rs 3,900 best hai: saari basics strong hoti hain aur aap online skills pe kaam shuru kar dete hain, lifetime access ke sath. Aur jab aap ready hon to Advance (Rs 8,700) mein ads, client acquisition aur live sessions ka poora system hai, wo option hamesha khula hai.",
     MENU_WEBSITE_LINE,
     "Start karna chahein to batayein, main payment details bhej deta hoon \u{1F642}",
   ].join("\n\n"),
