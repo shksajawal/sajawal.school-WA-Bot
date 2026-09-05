@@ -19,7 +19,7 @@ import {
   verifiedReferenceExists,
   type Contact,
 } from "../db.js";
-import { downloadMedia, markReadWithTyping, sendText, uploadMedia } from "../whatsapp.js";
+import { downloadMedia, markReadWithTyping, sendListMessage, sendText, uploadMedia } from "../whatsapp.js";
 import { sendCapiEvent } from "../capi.js";
 import { verifyPaymentScreenshot } from "../payments.js";
 import { handleOpsMessage, isOpsNumber, pingSupport, pingTeam, pingTeamAudio } from "../ops.js";
@@ -314,6 +314,39 @@ const MENU_REPLIES: Record<string, string> = {
   ].join("\n\n"),
 };
 
+// Tap-menu version of the opener (owner-approved 2026-09-05). Same words;
+// the numbered lines become native tappable rows. Replies arrive as menu_N
+// and are parsed back into "N" by the interactive handler upstream.
+const OPENER_MENU_BODY =
+  "Salam! \u{1F44B} Sajawal.School se Salman baat kar raha hoon.\n\nHum Pakistan ki sab se bari digital marketing community hain, 67,000+ students. Yahan sirf course nahi milta, zero se le kar apna kaam ya clients tak ka poora system milta hai, har step k lie practical knowledge, guidance, live sessions aur ek aisi community jahan roz koi na koi apni pehli sale ya pehla client share karta hai.\n\nAap kis stage pe hain? Neeche se select karein, taake main sahi guide kar sakoon \u{1F642}\n\nZyada tar log hamara Advance plan lete hain, lekin aapke liye kya sahi hai wo aapke jawab pe depend karta hai.";
+const OPENER_MENU_ROWS = [
+  { id: "menu_1", title: "Bilkul zero se", description: "Zero se seekhna hai" },
+  { id: "menu_2", title: "Freelancer hoon", description: "Clients/income barhani hai" },
+  { id: "menu_3", title: "Business owner hoon", description: "Apni ads khud chalani hain" },
+  { id: "menu_4", title: "Abhi clear nahi", description: "Mujhe guide kar dein" },
+];
+
+async function sendOpenerMenu(contact: Contact): Promise<void> {
+  try {
+    const waMsgId = await sendListMessage(
+      contact.wa_id,
+      OPENER_MENU_BODY,
+      "Stage choose karein",
+      OPENER_MENU_ROWS,
+    );
+    await insertMessage({
+      contactId: contact.id,
+      waMessageId: waMsgId,
+      direction: "out",
+      body: OPENER_MENU_BODY + "\n[menu: 1 zero se / 2 freelancer / 3 business / 4 clear nahi]",
+    });
+  } catch (err) {
+    // Any interactive-send hiccup falls back to the plain numbered opener.
+    console.error("List opener failed, falling back to text:", err);
+    await sendBotText(contact, OPENER);
+  }
+}
+
 async function runDrip(contact: Contact, body: string): Promise<boolean> {
   const text = body.trim();
   // The opener's stage menu is pending: a bare 1-4 plays the owner's scripted
@@ -344,7 +377,7 @@ async function runDrip(contact: Contact, body: string): Promise<boolean> {
   const won = await claimDripStep(contact.id, 0, 5);
   contact.drip_step = 5;
   if (!won) return true;
-  await sendBotText(contact, OPENER);
+  await sendOpenerMenu(contact);
   await armFollowup(contact);
   return true;
 }

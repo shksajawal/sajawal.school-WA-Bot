@@ -96,6 +96,29 @@ export async function uploadMedia(buffer: Buffer, mimeType: string): Promise<str
   return json.id;
 }
 
+/**
+ * Interactive list message: a native tap menu. Row title max 24 chars,
+ * description max 72, button label max 20 — WhatsApp hard limits.
+ */
+export async function sendListMessage(
+  to: string,
+  body: string,
+  buttonText: string,
+  rows: Array<{ id: string; title: string; description?: string }>,
+): Promise<string | null> {
+  const json = await graphPost(`${config.whatsapp.phoneNumberId}/messages`, {
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: { text: body },
+      action: { button: buttonText, sections: [{ rows }] },
+    },
+  });
+  return json.messages?.[0]?.id ??  null;
+}
+
 /** Send an audio message by media id (voice notes forwarded to the team). */
 export async function sendAudio(to: string, mediaId: string): Promise<string | null> {
   const json = await graphPost(`${config.whatsapp.phoneNumberId}/messages`, {
