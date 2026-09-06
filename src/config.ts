@@ -47,6 +47,9 @@ export const config = {
     // Screenshot verification is fraud-sensitive and low-volume — it can run a
     // stronger model than chat without moving the bill.
     visionModel: optional("CLAUDE_VISION_MODEL") ?? "claude-sonnet-5",
+    // Money moments (payment stage, qualified leads, deep conversations) get
+    // this model regardless of the cheap default above.
+    escalationModel: optional("CLAUDE_ESCALATION_MODEL") ?? "claude-sonnet-5",
   },
 
   ocr: {

@@ -128,8 +128,19 @@ export async function generateReply(
   }
   if (messages.length === 0) return null;
 
+  // Dynamic model routing (owner's call, 2026-09-07): the cheap model handles
+  // early exploratory chat; anything with money on the table — payment stage,
+  // a qualified buyer, or a deep/returning conversation — escalates. History
+  // depth catches returning leads whose status hasn't advanced yet.
+  const isMoneyMoment =
+    contact.status === "payment_pending" ||
+    contact.status === "payment_review" ||
+    contact.qualified ||
+    history.length >= 10;
+  const chatModel = isMoneyMoment ? config.anthropic.escalationModel : config.anthropic.model;
+
   const finalMessage = await client.beta.messages.toolRunner({
-    model: config.anthropic.model,
+    model: chatModel,
     // Replies are capped at ~400 chars by the prompt; 1024 tokens is triple
     // headroom (incl. tool calls) and hard-caps runaway output spend.
     max_tokens: 1024,
@@ -146,7 +157,7 @@ export async function generateReply(
     messages,
   });
 
-  await recordUsage({ kind: "chat", model: config.anthropic.model, usage: finalMessage.usage as any });
+  await recordUsage({ kind: "chat", model: chatModel, usage: finalMessage.usage as any });
 
   const text = finalMessage.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
@@ -173,12 +184,12 @@ export async function generateReply(
 export async function analyzeText(instruction: string, content: string): Promise<string | null> {
   try {
     const res = await client.messages.create({
-      model: config.anthropic.model,
+      model: config.anthropic.escalationModel,
       max_tokens: 600,
       system: instruction,
       messages: [{ role: "user", content }],
     });
-    await recordUsage({ kind: "learning", model: config.anthropic.model, usage: res.usage as any });
+    await recordUsage({ kind: "learning", model: config.anthropic.escalationModel, usage: res.usage as any });
     const block = res.content.find((b) => b.type === "text");
     return block && block.type === "text" ? block.text : null;
   } catch (err) {
