@@ -128,14 +128,19 @@ export async function generateReply(
   }
   if (messages.length === 0) return null;
 
-  // Dynamic model routing (owner's call, 2026-09-07): the cheap model handles
-  // early exploratory chat; anything with money on the table — payment stage,
-  // a qualified buyer, or a deep/returning conversation — escalates. History
-  // depth catches returning leads whose status hasn't advanced yet.
+  // Dynamic model routing (owner's rules, 2026-09-07): cheap model for early
+  // exploratory chat; the better model for serious buyers and high-intent
+  // questions. Refund/dispute chats are NOT escalated — those are handed to
+  // the human team, no model brains needed.
+  const lastInbound = [...history].reverse().find((m) => m.direction === "in")?.body ?? "";
+  const highIntent =
+    /price|fee|fees|payment|pay\b|paise|discount|join|admission|enroll|dakhla|start kar|lena hai|karna hai|kitna|kitne|account|easypaisa|jazzcash|bank/i.test(
+      lastInbound,
+    );
   const isMoneyMoment =
     contact.status === "payment_pending" ||
-    contact.status === "payment_review" ||
     contact.qualified ||
+    highIntent ||
     history.length >= 10;
   const chatModel = isMoneyMoment ? config.anthropic.escalationModel : config.anthropic.model;
 
