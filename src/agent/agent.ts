@@ -134,17 +134,21 @@ export async function generateReply(
   // the human team, no model brains needed.
   const lastInbound = [...history].reverse().find((m) => m.direction === "in")?.body ?? "";
   const highIntent =
-    /price|fee|fees|payment|pay\b|paise|discount|join|admission|enroll|dakhla|start kar|lena hai|karna hai|kitna|kitne|account|easypaisa|jazzcash|bank/i.test(
+    /price|fee|fees|payment|pay\b|paise|discount|join|admission|enroll|dakhla|lena hai|easypaisa|jazzcash|bank|account/i.test(
       lastInbound,
     );
   // Advice-funnel counselling runs long by design, so conversation depth must
   // not escalate it — the cheap model counsels; only real buying signals
   // (their pull) bring in the closer model.
+  // Depth counts only the customer's own messages: scripted openers and bot
+  // replies were inflating "10 messages" into a 4-exchange trigger, which is
+  // why Sonnet was eating ~65% of calls (measured 2026-09-09).
+  const inboundDepth = history.filter((m) => m.direction === "in").length;
   const isMoneyMoment =
     contact.status === "payment_pending" ||
     contact.qualified ||
     highIntent ||
-    (contact.funnel !== "advice" && history.length >= 10);
+    (contact.funnel !== "advice" && inboundDepth >= 8);
   const chatModel = isMoneyMoment ? config.anthropic.escalationModel : config.anthropic.model;
 
   const finalMessage = await client.beta.messages.toolRunner({
