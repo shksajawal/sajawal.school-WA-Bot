@@ -137,11 +137,14 @@ export async function generateReply(
     /price|fee|fees|payment|pay\b|paise|discount|join|admission|enroll|dakhla|start kar|lena hai|karna hai|kitna|kitne|account|easypaisa|jazzcash|bank/i.test(
       lastInbound,
     );
+  // Advice-funnel counselling runs long by design, so conversation depth must
+  // not escalate it — the cheap model counsels; only real buying signals
+  // (their pull) bring in the closer model.
   const isMoneyMoment =
     contact.status === "payment_pending" ||
     contact.qualified ||
     highIntent ||
-    history.length >= 10;
+    (contact.funnel !== "advice" && history.length >= 10);
   const chatModel = isMoneyMoment ? config.anthropic.escalationModel : config.anthropic.model;
 
   const finalMessage = await client.beta.messages.toolRunner({
