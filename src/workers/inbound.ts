@@ -103,7 +103,7 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
   // Free-advice campaign detection (owner, 2026-09-09): its ads prefill the
   // first message "Hi, I need guidance." These leads are counselled, not
   // sold — no opener, no menu, no course FAQ. Tag once, at first contact.
-  if (contact.drip_step === 0 && /^\s*(hi[,!.\s]*)?i need (guidance|advice)/i.test(m.text?.body ?? "")) {
+  if (contact.drip_step === 0 && /^\s*(hi|salam|aoa|assalam[a-z ]*)?[,!. ]*(i )?(need )?(guidance|advice)/i.test(m.text?.body ?? "")) {
     await updateContact(contact.id, { funnel: "advice", drip_step: -1 });
     contact.funnel = "advice";
     contact.drip_step = -1;
