@@ -485,7 +485,7 @@ export async function learningSamples(): Promise<Array<{ label: string; convo: s
   };
   const won = await pick(`c.status = 'purchased'`, 4, "WON");
   const lost = await pick(
-    `c.status = 'active' AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) < now() - interval '3 hours'`,
+    `c.status = 'active' AND COALESCE(c.funnel,'course') <> 'advice' AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) < now() - interval '3 hours'`,
     8,
     "LOST",
   );
@@ -519,4 +519,27 @@ export async function claimDripStep(id: number, from: number, to: number): Promi
     [id, from, to],
   );
   return (res.rowCount ?? 0) > 0;
+}
+
+
+/** Today's advice-funnel conversations (for the nightly advice-insights pass). */
+export async function adviceSamples(): Promise<string[]> {
+  const res = await pool.query(
+    `SELECT c.id FROM contacts c
+     WHERE c.funnel = 'advice'
+       AND EXISTS (SELECT 1 FROM messages m WHERE m.contact_id = c.id AND m.created_at > now() - interval '24 hours')
+     ORDER BY c.created_at DESC LIMIT 10`,
+  );
+  const out: string[] = [];
+  for (const row of res.rows) {
+    const msgs = await pool.query(
+      `SELECT direction, body FROM messages WHERE contact_id = $1 AND body IS NOT NULL ORDER BY created_at DESC LIMIT 12`,
+      [row.id],
+    );
+    const lines = msgs.rows
+      .reverse()
+      .map((m: { direction: string; body: string }) => `${m.direction === "in" ? "Lead" : "Salman"}: ${String(m.body).slice(0, 160)}`);
+    if (lines.length >= 2) out.push(lines.join("\n"));
+  }
+  return out;
 }

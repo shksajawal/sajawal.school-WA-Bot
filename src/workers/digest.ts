@@ -1,4 +1,5 @@
 import {
+  adviceSamples,
   followupsSentToday,
   getState,
   learningSamples,
@@ -129,6 +130,21 @@ export async function sendTeamBrief(_force = false): Promise<boolean> {
     }
   } catch (err) {
     console.error("Learning section failed:", err);
+  }
+
+  // Advice-funnel intelligence: what the free-guidance crowd asks, wants and
+  // struggles with — the owner's strategy feed for angles, content and offers.
+  try {
+    const adv = await adviceSamples();
+    if (adv.length >= 3) {
+      const insights = await analyzeText(
+        "You review today's FREE ADVICE conversations for Sajawal.School (bot counsels on freelancing/ecommerce/online business, sells only on pull). Reply with 3-4 short bullets, max 80 words, no preamble: the top questions/themes people brought, what they are struggling with, how many showed course interest on their own, and ONE strategic opportunity these conversations reveal (ad angle, content idea, or offer gap).",
+        adv.map((c, i) => `#${i + 1}\n${c}`).join("\n\n"),
+      );
+      if (insights) parts.push(`\u{1F4A1} Advice-funnel insights:\n${insights.slice(0, 700)}`);
+    }
+  } catch (err) {
+    console.error("Advice insights failed:", err);
   }
 
   parts.push(`Reply "sales", "leads", "cost" ya "update" kisi bhi waqt.`);
