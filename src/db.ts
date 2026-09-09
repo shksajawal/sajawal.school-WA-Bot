@@ -33,6 +33,7 @@ export interface Contact {
   last_user_msg_at: Date | null;
   drip_step: number;
   email: string | null;
+  funnel: string;
 }
 
 export interface StoredMessage {
@@ -78,7 +79,7 @@ export async function getContact(id: number): Promise<Contact | null> {
 
 export async function updateContact(
   id: number,
-  fields: Partial<Pick<Contact, "status" | "qualified" | "followup_count" | "last_user_msg_at" | "name" | "drip_step" | "email">>,
+  fields: Partial<Pick<Contact, "status" | "qualified" | "followup_count" | "last_user_msg_at" | "name" | "drip_step" | "email" | "funnel">>,
 ): Promise<void> {
   const keys = Object.keys(fields);
   if (keys.length === 0) return;
@@ -407,6 +408,7 @@ export async function usageByDay(days = 7): Promise<UsageDay[]> {
 /** One-row stats pack for the 11pm PKT daily report (today vs yesterday, PKT days). */
 export interface OpsDailyStats {
   leads_t: number; leads_y: number;
+  advice_t: number; advice_y: number;
   paystage_t: number; paystage_y: number;
   sales_t: number; sales_y: number;
   rev_t: string | null; rev_y: string | null;
@@ -420,8 +422,10 @@ export async function opsDailyStats(): Promise<OpsDailyStats> {
               (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi') - interval '1 day' AS y0
      )
      SELECT
-       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.t0) AS leads_t,
-       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.y0 AND created_at < b.t0) AS leads_y,
+       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.t0 AND COALESCE(funnel,'course') <> 'advice') AS leads_t,
+       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.y0 AND created_at < b.t0 AND COALESCE(funnel,'course') <> 'advice') AS leads_y,
+       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.t0 AND funnel = 'advice') AS advice_t,
+       (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.y0 AND created_at < b.t0 AND funnel = 'advice') AS advice_y,
        (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.t0 AND status IN ('payment_pending','payment_review','purchased')) AS paystage_t,
        (SELECT count(*)::int FROM contacts, b WHERE created_at >= b.y0 AND created_at < b.t0 AND status IN ('payment_pending','payment_review','purchased')) AS paystage_y,
        (SELECT count(*)::int FROM payments, b WHERE verified AND created_at >= b.t0) AS sales_t,

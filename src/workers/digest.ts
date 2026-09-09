@@ -61,7 +61,7 @@ export async function sendTeamBrief(_force = false): Promise<boolean> {
 
   const parts: string[] = [
     `\u{1F4CA} Daily Report, ${pktDateStr()}\n` +
-      `Leads: ${s.leads_t} (kal ${s.leads_y})\n` +
+      `Leads: ${s.leads_t} (kal ${s.leads_y})${s.advice_t || s.advice_y ? ` | Advice leads: ${s.advice_t} (kal ${s.advice_y})` : ""}\n` +
       `Payment stage: ${s.paystage_t} (kal ${s.paystage_y})\n` +
       `Sales: ${s.sales_t} = Rs ${rev} (Core ${s.core_t} / Advance ${s.adv_t}), kal ${s.sales_y} = Rs ${revY}\n` +
       `Lead to sale: ${convT} (kal ${convY})\n` +

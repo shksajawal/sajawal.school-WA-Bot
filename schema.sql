@@ -100,3 +100,7 @@ CREATE TABLE IF NOT EXISTS api_usage (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_api_usage_created ON api_usage(created_at);
+
+-- Advice-funnel leads (free-advice CTWA campaign, 2026-09-09): counselled,
+-- not sold. Detected by the campaign's prefill "i need advice".
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS funnel TEXT NOT NULL DEFAULT 'course';

@@ -99,13 +99,19 @@ export function startFollowupWorker(): Worker {
         if (contact.status === "payment_pending") {
           await sendCapiEvent(contact, "CartAbandoned");
         }
-        if (isFinalTouch) {
+        if (isFinalTouch && contact.funnel !== "advice") {
           await sendLastReminder(contact);
         } else {
+          // Advice-funnel leads are counselled, never chased with join copy:
+          // both touches stay soft, and they never get the Last Reminder image.
           const nudge =
-            contact.status === "payment_pending"
-              ? "Thought to check \u{1F603} Did you get the chance to send the fee, or did something come up?"
-              : "Anything I can answer for you to make the right decision?";
+            contact.funnel === "advice"
+              ? isFinalTouch
+                ? "Agar future mein kabhi koi sawal ho, yahan message kar dein, khushi se help karoon ga \u{1F642}"
+                : "Koi aur sawal ho ya kisi cheez pe guidance chahiye ho to pooch lein \u{1F642}"
+              : contact.status === "payment_pending"
+                ? "Thought to check \u{1F603} Did you get the chance to send the fee, or did something come up?"
+                : "Anything I can answer for you to make the right decision?";
           const waMsgId = await sendText(contact.wa_id, nudge);
           await insertMessage({ contactId, waMessageId: waMsgId, direction: "out", body: nudge });
         }

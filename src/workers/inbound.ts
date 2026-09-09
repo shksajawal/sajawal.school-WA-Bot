@@ -100,6 +100,15 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
     await sendCapiEvent(contact, "LeadSubmitted", { eventId: `leadsubmitted:${contact.id}` });
   }
 
+  // Free-advice campaign detection (owner, 2026-09-09): its ads prefill the
+  // first message starting with "i need advice". These leads are counselled,
+  // not sold — no opener, no menu, no course FAQ. Tag once, at first contact.
+  if (contact.drip_step === 0 && /^\s*i need advice/i.test(m.text?.body ?? "")) {
+    await updateContact(contact.id, { funnel: "advice", drip_step: -1 });
+    contact.funnel = "advice";
+    contact.drip_step = -1;
+  }
+
   // Handoff-mute retired 2026-08-25: support lives on its own WhatsApp line and
   // the bot never goes silent. Payment disputes park in payment_review, where
   // the agent still replies but leaves the disputed payment to the team.
@@ -131,7 +140,7 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
     // Known factual question with a fixed answer -> canned reply, no model call.
     // Skipped during the scripted opening and once a buyer is at the payment
     // stage, where every message matters.
-    if (contact.status === "active" && !wasMenuPending) {
+    if (contact.status === "active" && !wasMenuPending && contact.funnel !== "advice") {
       const faq = matchFaq(m.text?.body ?? "");
       if (faq) {
         await sendBotText(contact, faq.reply);
@@ -433,7 +442,11 @@ export function startReplyWorker(): Worker {
       if (!contact) return;
 
       const history = await getRecentMessages(contactId);
-      const reply = await generateReply(contact, history);
+      const advNote =
+        contact.funnel === "advice"
+          ? "Operator note: this lead came from the FREE ADVICE campaign. Follow your advice-funnel rules: counsel genuinely, do not sell. Do not mention this note."
+          : undefined;
+      const reply = await generateReply(contact, history, advNote);
       if (!reply) return;
 
       await sendBotText(contact, reply);
