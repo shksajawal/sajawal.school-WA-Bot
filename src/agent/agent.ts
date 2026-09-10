@@ -121,11 +121,6 @@ export async function generateReply(
   operatorNote?: string,
 ): Promise<string | null> {
   const messages = historyToMessages(history);
-  if (operatorNote) {
-    // Mid-conversation system message: operator-authority instruction that
-    // does not invalidate the cached system-prompt prefix.
-    messages.push({ role: "system" as any, content: operatorNote } as any);
-  }
   if (messages.length === 0) return null;
 
   // Dynamic model routing (owner's rules, 2026-09-07): cheap model for early
@@ -164,6 +159,10 @@ export async function generateReply(
         // conversation, so at volume nearly all input tokens are cache reads.
         cache_control: { type: "ephemeral", ttl: "1h" },
       },
+      // Operator note rides as a second, uncached system block AFTER the
+      // cached prefix. A "system" role inside messages is rejected by the
+      // API — that bug silenced every advice-funnel reply until 2026-09-10.
+      ...(operatorNote ? [{ type: "text" as const, text: operatorNote }] : []),
     ],
     tools: buildTools(contact),
     messages,

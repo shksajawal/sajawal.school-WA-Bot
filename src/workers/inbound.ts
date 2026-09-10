@@ -92,7 +92,10 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
   if (dbMsgId === null) return;
 
   await updateContact(contact.id, { last_user_msg_at: new Date(), followup_count: 0 });
-  await markReadWithTyping(m.id);
+  // Typing indicator ONLY for messages that will get a reply. Showing it on
+  // voice notes/stickers (which we deliberately never answer) reads as "the
+  // AI typed and never sent" — a real ad-comment complaint.
+  if (m.type === "text" || m.type === "image") await markReadWithTyping(m.id);
 
   // First message from an ad click → LeadSubmitted seeds the dataset (the
   // messaging channel's own event name — see the note in capi.ts)

@@ -45,6 +45,35 @@ async function main() {
 
   checkCapiConfig();
 
+  // Recovery sweep: any contact whose last inbound text is unanswered and
+  // still inside the free 24h window gets a reply enqueued on boot. Added
+  // after the operator-note bug silenced advice leads (2026-09-10).
+  void (async () => {
+    try {
+      const { pool } = await import("./db.js");
+      const res = await pool.query(
+        `WITH last_in AS (
+           SELECT DISTINCT ON (m.contact_id) m.contact_id, m.id, m.created_at
+           FROM messages m
+           WHERE m.direction='in' AND m.msg_type='text'
+             AND m.created_at > now() - interval '23 hours'
+           ORDER BY m.contact_id, m.created_at DESC)
+         SELECT li.contact_id, li.id FROM last_in li
+         WHERE NOT EXISTS (
+           SELECT 1 FROM messages o WHERE o.contact_id = li.contact_id
+             AND o.direction='out' AND o.created_at > li.created_at)
+         LIMIT 300`,
+      );
+      const { enqueueReply } = await import("./queue.js");
+      for (const row of res.rows) {
+        await enqueueReply({ contactId: row.contact_id, afterMessageId: row.id });
+      }
+      if (res.rows.length) console.log(`Recovery: enqueued replies for ${res.rows.length} hanging conversations`);
+    } catch (err) {
+      console.error("Recovery sweep failed:", err);
+    }
+  })();
+
   loud(startInboundWorker());
   loud(startReplyWorker());
   loud(startFollowupWorker());
