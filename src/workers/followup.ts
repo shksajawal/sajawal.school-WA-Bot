@@ -21,7 +21,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // in bot_state and refreshed before WhatsApp's ~30 day media expiry. If the
 // image file is missing, the caption still goes out as plain text.
 const LAST_REMINDER_CAPTION =
-  "Last Reminder \u{1F604} Join krne se phle koi bhe sawal ho to ap mere se puch skte hen.";
+  "Last Reminder \u{1F604} Jab ready hon to yahan text kar dein, ya www.sajawal.school pe details dekh kar khud sign up kar lein. \u{1F642}"
 const REMINDER_IMAGE_PATH = "assets/followup-last-reminder.jpg";
 const REMINDER_MEDIA_STATE_KEY = "followup_reminder_media";
 
@@ -119,7 +119,9 @@ export function startFollowupWorker(): Worker {
         // last message — still inside the free window, and far enough apart that
         // two touches never feel like chasing.
         if (touch < config.followup.maxTouches) {
-          const nextAt = currentLast + 20 * 60 * 60 * 1000;
+          // 22h: the last free message, close enough to expiry to matter,
+          // far enough that a late queue still delivers (owner, 2026-09-13).
+          const nextAt = currentLast + 22 * 60 * 60 * 1000;
           const delay = nextAt - Date.now();
           if (delay > 30 * 60 * 1000) {
             await scheduleFollowup({ contactId, touch: touch + 1, lastUserMsgAt }, delay);
