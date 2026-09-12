@@ -256,7 +256,7 @@ async function replyDigest(to: string): Promise<void> {
 async function replyHelp(to: string): Promise<void> {
   await sendText(
     to,
-    `Commands (message must start with the word):\n\n"update" - today\'s full report\n"sales" - last 7 days sales with screenshots\n"leads" - everyone needing action\n"cost" - API spend\n"week" - 7 day summary\n"all" - till-date totals\na phone number - that customer\'s chat\n\nRead-only - nothing can be changed from here.`,
+    `Commands (message must start with the word):\n\n"update" - today\'s report\n"leads" - everyone needing action\n"done 92300xxxxxxx" - mark that lead handled\n"ALL DONE" - mark the whole list handled\n"sales" - last 7 days sales with screenshots\n"cost" - API spend\n"week" - 7 day summary\n"all" - till-date totals\na phone number - that customer\'s chat`,
   );
 }
 
