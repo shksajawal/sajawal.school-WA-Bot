@@ -1,5 +1,6 @@
 import {
   adviceSamples,
+  apiUsageTwoDays,
   followupsSentToday,
   getState,
   learningSamples,
@@ -8,26 +9,31 @@ import {
   setState,
   supportQueriesSince,
 } from "../db.js";
-import { pingTeam } from "../ops.js";
+import { config } from "../config.js";
+import { sendText } from "../whatsapp.js";
 import { analyzeText } from "../agent/agent.js";
 
 /**
- * Daily team report, owner's spec (2026-08-29):
- * - ONE report at 23:00 PKT to both admin and support numbers, covering the
- *   whole day: funnel numbers vs yesterday, what's good / what's bad, the
- *   questions the bot could not handle (knowledge to feed), and Salman's
- *   action list.
- * - No rolling 2-hourly brief any more; urgent and big things ping in real
- *   time from where they happen (sales, disputes, handoffs).
- * - "update" sends the same report on demand. Weekly / till-date views exist
- *   only on demand ("week" command), never pushed.
+ * Reporting layer, owner's spec (2026-09-12):
+ * - OWNER gets ONE brief numbers-only message at 23:50 PKT: sales, leads,
+ *   conversion, API cost, each vs yesterday, plus a one-line pipeline pulse.
+ *   No screenshots, no till-date, no walls of text.
+ * - SALMAN (support) gets the working pack at 23:50 PKT (action items with
+ *   links + money at stake + carryover age, knowledge gaps, learnings,
+ *   advice insights) and a fresh morning action list at 10:00 PKT.
+ * - Real-time pings (sales, disputes, handoffs) are unchanged.
+ * - Ranged/till-date data only on demand, never pushed.
  */
-const STATE_KEY = "last_daily_report_date";
+const OWNER_STATE_KEY = "last_owner_daily_date";
+const MORNING_STATE_KEY = "last_salman_morning_date";
 
-function pktHour(): number {
-  return Number(
-    new Date().toLocaleString("en-GB", { timeZone: "Asia/Karachi", hour: "2-digit", hour12: false }),
-  );
+const PRICE: Record<string, [number, number, number, number]> = {
+  "claude-haiku-4-5": [1, 5, 0.1, 1.25],
+  "claude-sonnet-5": [3, 15, 0.3, 3.75],
+};
+
+function pktNow(): Date {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Karachi" }));
 }
 
 function pktDateStr(): string {
@@ -40,91 +46,111 @@ function pktDateStr(): string {
 
 function pktDayStartUtc(): Date {
   const now = new Date();
-  const pkt = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Karachi" }));
+  const pkt = pktNow();
   const dayMs = pkt.getHours() * 3600_000 + pkt.getMinutes() * 60_000 + pkt.getSeconds() * 1000;
   return new Date(now.getTime() - dayMs);
 }
 
-const pct = (a: number, b: number): string => (b > 0 ? ((a / b) * 100).toFixed(1) + "%" : "0%");
+const pct = (a: number, b: number): string => (b > 0 ? ((a / b) * 100).toFixed(2) + "%" : "0%");
 
-/** Builds and sends the daily report. Also used by the on-demand "update" command. */
-export async function sendTeamBrief(_force = false): Promise<boolean> {
-  const [s, queries, items] = await Promise.all([
-    opsDailyStats(),
-    supportQueriesSince(pktDayStartUtc()),
-    opsActionItems(),
-  ]);
-
-  const convT = pct(s.sales_t, s.leads_t);
-  const convY = pct(s.sales_y, s.leads_y);
-  const rev = Number(s.rev_t ?? 0).toLocaleString();
-  const revY = Number(s.rev_y ?? 0).toLocaleString();
-
-  const parts: string[] = [
-    `\u{1F4CA} Daily Report, ${pktDateStr()}\n` +
-      `Leads: ${s.leads_t} (kal ${s.leads_y})${s.advice_t || s.advice_y ? ` | Advice leads: ${s.advice_t} (kal ${s.advice_y})` : ""}\n` +
-      `Payment stage: ${s.paystage_t} (kal ${s.paystage_y})\n` +
-      `Sales: ${s.sales_t} = Rs ${rev} (Core ${s.core_t} / Advance ${s.adv_t}), kal ${s.sales_y} = Rs ${revY}\n` +
-      `Lead to sale: ${convT} (kal ${convY})\n` +
-      `Tracking: ${s.capi_ok} events ok${s.capi_fail ? `, ${s.capi_fail} FAILED` : ""}`,
-  ];
-
-  // Auto insight lines: one good, one bad, derived from the day's numbers.
-  const good: string[] = [];
-  const bad: string[] = [];
-  if (s.leads_t > s.leads_y) good.push(`lead volume up (${s.leads_y} -> ${s.leads_t})`);
-  if (s.sales_t > s.sales_y) good.push(`sales up (${s.sales_y} -> ${s.sales_t})`);
-  if (s.sales_t < s.sales_y) bad.push(`sales down (${s.sales_y} -> ${s.sales_t})`);
-  if (s.paystage_t < s.paystage_y) bad.push(`fewer leads reaching payment (${s.paystage_y} -> ${s.paystage_t})`);
-  if (s.capi_fail > 0) bad.push(`${s.capi_fail} tracking events failed`);
-  // Tripwire: follow-ups claiming to work is not the same as follow-ups
-  // delivered. Zero sends on a day with real lead volume is an alarm.
-  try {
-    const fu = await followupsSentToday();
-    parts[0] += `\nFollow-ups sent: ${fu.nudges} nudges, ${fu.reminders} reminders`;
-    if (fu.nudges + fu.reminders === 0 && s.leads_t > 50) {
-      bad.push("ZERO follow-ups delivered today - follow-up system may be broken, tell Claude");
-    }
-  } catch (err) {
-    console.error("followup tripwire failed:", err);
+async function apiCostTodayYesterday(): Promise<{ t: number; y: number }> {
+  const rows = await apiUsageTwoDays();
+  const out = { t: 0, y: 0 };
+  for (const r of rows) {
+    const [pi, po, pcr, pcw] = PRICE[r.model] ?? [3, 15, 0.3, 3.75];
+    out[r.day] += (r.inp / 1e6) * pi + (r.outp / 1e6) * po + (r.cr / 1e6) * pcr + (r.cw / 1e6) * pcw;
   }
-  if (good.length) parts.push(`\u{1F44D} Good: ${good.join("; ")}`);
-  if (bad.length) parts.push(`\u{26A0} Watch: ${bad.join("; ")}`);
+  return out;
+}
 
-  // Questions the bot handed to humans today = knowledge gaps worth feeding.
-  const gaps = queries.filter((q) => !q.summary.startsWith("Follow-up needed")).slice(0, 6);
+/** The owner's entire daily update. Five lines of numbers, one pulse line. */
+async function buildOwnerBrief(): Promise<string> {
+  const [s, cost, items] = await Promise.all([opsDailyStats(), apiCostTodayYesterday(), opsActionItems()]);
+  const arrow = (t: number, y: number) => (t > y ? "▲" : t < y ? "▼" : "=");
+  // Carryover: items whose wa_id already appeared in yesterday's list.
+  let carried = 0;
+  try {
+    const prev = JSON.parse((await getState(`salman_items_${yesterdayKey()}`)) ?? "[]") as string[];
+    carried = items.filter((i) => prev.includes(i.wa_id)).length;
+  } catch {
+    /* first run */
+  }
+  return (
+    `\u{1F4CA} ${pktDateStr()}\n` +
+    `Sales: ${s.sales_t} = Rs ${Number(s.rev_t ?? 0).toLocaleString()} (kal ${s.sales_y} = Rs ${Number(s.rev_y ?? 0).toLocaleString()}) ${arrow(s.sales_t, s.sales_y)}\n` +
+    `Leads: ${s.leads_t} (kal ${s.leads_y}) ${arrow(s.leads_t, s.leads_y)}${s.advice_t || s.advice_y ? ` | Advice: ${s.advice_t} (kal ${s.advice_y})` : ""}\n` +
+    `Conv: ${pct(s.sales_t, s.leads_t)} (kal ${pct(s.sales_y, s.leads_y)})\n` +
+    `Payment stage: ${s.paystage_t} (kal ${s.paystage_y}) ${arrow(s.paystage_t, s.paystage_y)}\n` +
+    `API: $${cost.t.toFixed(2)} (kal $${cost.y.toFixed(2)})\n` +
+    `Pipeline: ${items.length} open${carried ? `, ${carried} carried from kal` : ""}${s.capi_fail ? ` | ⚠ ${s.capi_fail} tracking events FAILED` : ""}`
+  );
+}
+
+function yesterdayKey(): string {
+  const d = new Date(Date.now() - 24 * 3600_000);
+  return d.toLocaleDateString("en-GB", { timeZone: "Asia/Karachi", day: "2-digit", month: "short" });
+}
+
+const AOV = 4890;
+
+/** Salman's action list with money at stake and carryover age. */
+async function buildSalmanList(): Promise<string> {
+  const items = await opsActionItems();
+  if (!items.length) return "✅ Pipeline clear. Koi pending action nahi.";
+  let prev: string[] = [];
+  try {
+    prev = JSON.parse((await getState(`salman_items_${yesterdayKey()}`)) ?? "[]") as string[];
+  } catch {
+    /* first run */
+  }
+  const atStake = items.length * AOV;
+  const lines = items.slice(0, 10).map((i, n) => {
+    const old = prev.includes(i.wa_id) ? " (KAL SE PENDING)" : "";
+    return `${n + 1}. ${i.name ?? "?"}: ${i.note}${old}\n   wa.me/${i.wa_id}`;
+  });
+  try {
+    await setState(`salman_items_${pktDateStr()}`, JSON.stringify(items.map((i) => i.wa_id)));
+  } catch {
+    /* non-fatal */
+  }
+  return (
+    `\u{1F3AF} Action list (${items.length} leads, ~Rs ${atStake.toLocaleString()} table par):\n` +
+    lines.join("\n") +
+    (items.length > 10 ? `\n(+${items.length - 10} aur, reply "leads")` : "") +
+    `\n\nJo close ho jaye, uska screenshot aayega hi. Jo mar jaye, usay ignore. Baqi sab ko aaj hath lagna chahiye.`
+  );
+}
+
+/** Salman's EOD pack: action list + gaps + learnings + advice intel. */
+async function buildSalmanPack(): Promise<string> {
+  const parts: string[] = [await buildSalmanList()];
+
+  const queries = await supportQueriesSince(pktDayStartUtc());
+  const gaps = queries.filter((q) => !q.summary.startsWith("Follow-up needed")).slice(0, 5);
   if (gaps.length) {
     parts.push(
-      `\u{1F534} Bot needed human help today (feed answers if repeating):\n` +
-        gaps.map((q) => `• ${q.name ?? "?"}: ${q.summary.slice(0, 90)}`).join("\n"),
+      `\u{1F534} Aaj bot ko human help chahiye thi:\n` +
+        gaps.map((q) => `• ${q.name ?? "?"}: ${q.summary.slice(0, 80)}\n  wa.me/${q.wa_id}`).join("\n"),
     );
   }
 
-  // Salman's action list: pending items with instant links.
-  if (items.length) {
-    parts.push(
-      `✅ Salman action items (${items.length}):\n` +
-        items
-          .slice(0, 8)
-          .map((i) => `• ${i.name ?? "?"}: ${i.note}\n  wa.me/${i.wa_id}`)
-          .join("\n") +
-        (items.length > 8 ? `\n(+${items.length - 8} more, reply "leads")` : ""),
-    );
+  try {
+    const fu = await followupsSentToday();
+    parts.push(`Follow-ups delivered today: ${fu.nudges} nudges, ${fu.reminders} reminders`);
+    if (fu.nudges + fu.reminders === 0) parts.push("⚠ ZERO follow-ups today - tell the owner, system may be broken");
+  } catch {
+    /* non-fatal */
   }
 
-  // Nightly self-review: ONE model call comparing today's won vs lost chats.
-  // The lessons go in the report (owner decides what gets baked into the
-  // prompt) and are archived in bot_state for the weekly review.
   try {
     const samples = await learningSamples();
     if (samples.length >= 3) {
-      const convos = samples.map((c, i) => `#${i + 1} [${c.label}]\n${c.convo}`).join("\n\n");
       const lessons = await analyzeText(
-        "You review today's WhatsApp sales chats for Sajawal.School (the bot poses as Salman). Compare the WON and LOST conversations. Reply with 3-5 short bullets only, max 90 words total, no preamble: what is working, what exactly killed the lost chats (the specific message or moment), one concrete change to close more tomorrow, and whether the bot's tone drifted from casual Pakistani Roman Urdu texting style.",
-        convos,
+        "You review today's WhatsApp sales chats for Sajawal.School (the bot poses as Salman). Compare WON and LOST conversations. Reply with 3 short bullets only, max 70 words, no preamble: what worked, what killed the lost chats, one concrete change for tomorrow.",
+        samples.map((c, i) => `#${i + 1} [${c.label}]\n${c.convo}`).join("\n\n"),
       );
       if (lessons) {
-        parts.push(`\u{1F9E0} Aaj ki learnings:\n${lessons.slice(0, 900)}`);
+        parts.push(`\u{1F9E0} Learnings:\n${lessons.slice(0, 600)}`);
         await setState(`learnings_${pktDateStr()}`, lessons);
       }
     }
@@ -132,39 +158,91 @@ export async function sendTeamBrief(_force = false): Promise<boolean> {
     console.error("Learning section failed:", err);
   }
 
-  // Advice-funnel intelligence: what the free-guidance crowd asks, wants and
-  // struggles with — the owner's strategy feed for angles, content and offers.
   try {
     const adv = await adviceSamples();
     if (adv.length >= 3) {
       const insights = await analyzeText(
-        "You review today's FREE ADVICE conversations for Sajawal.School (bot counsels on freelancing/ecommerce/online business, sells only on pull). Reply with 3-4 short bullets, max 80 words, no preamble: the top questions/themes people brought, what they are struggling with, how many showed course interest on their own, and ONE strategic opportunity these conversations reveal (ad angle, content idea, or offer gap).",
+        "You review today's FREE ADVICE conversations for Sajawal.School. Reply with 3 short bullets, max 60 words, no preamble: top themes people brought, how many showed course interest on their own, one strategic opportunity (ad angle, content idea, or offer gap).",
         adv.map((c, i) => `#${i + 1}\n${c}`).join("\n\n"),
       );
-      if (insights) parts.push(`\u{1F4A1} Advice-funnel insights:\n${insights.slice(0, 700)}`);
+      if (insights) parts.push(`\u{1F4A1} Advice-funnel intel:\n${insights.slice(0, 500)}`);
     }
   } catch (err) {
     console.error("Advice insights failed:", err);
   }
 
-  parts.push(`Reply "sales", "leads", "cost" ya "update" kisi bhi waqt.`);
+  return parts.join("\n\n");
+}
 
-  await pingTeam(parts.join("\n\n"));
-  await setState(STATE_KEY, pktDateStr());
+const ownerTargets = (): string[] => [config.ops.adminNumber].filter((n): n is string => Boolean(n));
+const supportOnly = (): string[] => [
+  ...new Set([config.ops.supportNumber, config.opsAlertNumber].filter((n): n is string => Boolean(n))),
+];
+
+/** On-demand "update": owner number gets the brief, support gets the pack. */
+export async function sendTeamBrief(_force = false, requester?: string): Promise<boolean> {
+  if (requester && requester === config.ops.adminNumber) {
+    await sendText(requester, await buildOwnerBrief());
+    return true;
+  }
+  if (requester) {
+    await sendText(requester, await buildSalmanPack());
+    return true;
+  }
+  // Scheduled EOD: both, each their own format.
+  const brief = await buildOwnerBrief();
+  for (const to of ownerTargets()) {
+    try {
+      await sendText(to, brief);
+    } catch (err) {
+      console.error("Owner daily failed:", err);
+    }
+  }
+  const pack = await buildSalmanPack();
+  for (const to of supportOnly()) {
+    try {
+      await sendText(to, pack);
+    } catch (err) {
+      console.error("Salman pack failed:", err);
+    }
+  }
   return true;
 }
 
-/** Fires the daily report once, at or after 23:00 PKT, exactly once per PKT day. */
+/** 23:50 PKT: EOD for both. 10:00 PKT: fresh morning action list for Salman. */
 export function startBriefScheduler(): NodeJS.Timeout {
   const tick = async () => {
     try {
-      if (pktHour() < 23) return;
-      const last = await getState(STATE_KEY);
-      if (last === pktDateStr()) return;
-      await sendTeamBrief();
-      console.log("Daily report sent");
+      const now = pktNow();
+      const h = now.getHours();
+      const min = now.getMinutes();
+
+      if (h === 23 && min >= 50) {
+        const last = await getState(OWNER_STATE_KEY);
+        if (last !== pktDateStr()) {
+          await sendTeamBrief();
+          await setState(OWNER_STATE_KEY, pktDateStr());
+          console.log("EOD reports sent");
+        }
+      }
+
+      if (h === 10) {
+        const last = await getState(MORNING_STATE_KEY);
+        if (last !== pktDateStr()) {
+          const list = await buildSalmanList();
+          for (const to of supportOnly()) {
+            try {
+              await sendText(to, `☀️ Good morning. ${list}`);
+            } catch (err) {
+              console.error("Morning list failed:", err);
+            }
+          }
+          await setState(MORNING_STATE_KEY, pktDateStr());
+          console.log("Morning action list sent");
+        }
+      }
     } catch (err) {
-      console.error("Daily report failed:", err);
+      console.error("Report scheduler failed:", err);
     }
   };
   void tick();

@@ -543,3 +543,22 @@ export async function adviceSamples(): Promise<string[]> {
   }
   return out;
 }
+
+/** Token sums per model for today and yesterday (PKT), for the owner's cost line. */
+export async function apiUsageTwoDays(): Promise<
+  Array<{ day: "t" | "y"; model: string; inp: number; outp: number; cr: number; cw: number }>
+> {
+  const res = await pool.query(
+    `WITH b AS (
+       SELECT (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi') AS t0,
+              (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi') - interval '1 day' AS y0
+     )
+     SELECT CASE WHEN created_at >= b.t0 THEN 't' ELSE 'y' END AS day, model,
+            sum(input_tokens)::bigint AS inp, sum(output_tokens)::bigint AS outp,
+            sum(cache_read_tokens)::bigint AS cr, sum(cache_write_tokens)::bigint AS cw
+     FROM api_usage, b
+     WHERE created_at >= b.y0
+     GROUP BY 1, 2`,
+  );
+  return res.rows.map((r: any) => ({ day: r.day, model: r.model, inp: Number(r.inp), outp: Number(r.outp), cr: Number(r.cr), cw: Number(r.cw) }));
+}

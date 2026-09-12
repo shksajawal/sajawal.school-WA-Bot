@@ -135,7 +135,7 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
     else if (isCmd(/^(cost|spend|usage|api)/)) await replyCost(from);
     else if (isCmd(/^(week|hafta|7 ?d)/)) await replyRange(from, 7, "Last 7 days");
     else if (isCmd(/^(all|total|till ?date|overall)/)) await replyAllTime(from);
-    else if (isCmd(/^(update|brief|report|latest|abhi)/)) await sendTeamBrief(true);
+    else if (isCmd(/^(update|brief|report|latest|abhi)/)) await sendTeamBrief(true, from);
     else if (isCmd(/^(sales?|sold|revenue)/)) await replySales(from);
     else if (isCmd(/^(leads?|pending|actions?|follow)/)) await replyLeads(from);
     else if (isCmd(/^(summary|digest|stats)/)) await replyDigest(from);
