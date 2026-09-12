@@ -104,7 +104,7 @@ export function startOpsKeepalive(): NodeJS.Timeout {
         if ((await getState(`ops_keepalive_${to}`)) === raw) continue;
         await sendText(
           to,
-          "Session reminder: bot updates ka window ~1 hour mein expire ho raha hai. Kisi bhi reply (ok likh dein) se agle 24h active rahega 🙂",
+          "Session reminder: this window expires in ~1 hour. Reply anything (ok works) to keep bot updates flowing for the next 24h 🙂",
         );
         await setState(`ops_keepalive_${to}`, raw);
       } catch (err) {
@@ -221,8 +221,8 @@ async function replyLeads(to: string): Promise<void> {
   );
   const label: Record<string, string> = {
     payment_review: "🔴 PAYMENT REVIEW",
-    stalled_hot: "🟠 CHECKOUT INCOMPLETE (aaj)",
-    stalled_cooling: "🟡 CHECKOUT INCOMPLETE (1-3 din)",
+    stalled_hot: "🟠 CHECKOUT INCOMPLETE (today)",
+    stalled_cooling: "🟡 CHECKOUT INCOMPLETE (1-3 days)",
     hot_lead_silent: "⚪ HOT LEAD SILENT",
   };
   const lines = items.map(

@@ -77,12 +77,12 @@ async function buildOwnerBrief(): Promise<string> {
   }
   return (
     `\u{1F4CA} ${pktDateStr()}\n` +
-    `Sales: ${s.sales_t} = Rs ${Number(s.rev_t ?? 0).toLocaleString()} (kal ${s.sales_y} = Rs ${Number(s.rev_y ?? 0).toLocaleString()}) ${arrow(s.sales_t, s.sales_y)}\n` +
-    `Leads: ${s.leads_t} (kal ${s.leads_y}) ${arrow(s.leads_t, s.leads_y)}${s.advice_t || s.advice_y ? ` | Advice: ${s.advice_t} (kal ${s.advice_y})` : ""}\n` +
-    `Conv: ${pct(s.sales_t, s.leads_t)} (kal ${pct(s.sales_y, s.leads_y)})\n` +
-    `Payment stage: ${s.paystage_t} (kal ${s.paystage_y}) ${arrow(s.paystage_t, s.paystage_y)}\n` +
-    `API: $${cost.t.toFixed(2)} (kal $${cost.y.toFixed(2)})\n` +
-    `Pipeline: ${items.length} open${carried ? `, ${carried} carried from kal` : ""}${s.capi_fail ? ` | ⚠ ${s.capi_fail} tracking events FAILED` : ""}`
+    `Sales: ${s.sales_t} = Rs ${Number(s.rev_t ?? 0).toLocaleString()} (yday ${s.sales_y} = Rs ${Number(s.rev_y ?? 0).toLocaleString()}) ${arrow(s.sales_t, s.sales_y)}\n` +
+    `Leads: ${s.leads_t} (yday ${s.leads_y}) ${arrow(s.leads_t, s.leads_y)}${s.advice_t || s.advice_y ? ` | Advice: ${s.advice_t} (yday ${s.advice_y})` : ""}\n` +
+    `Conv: ${pct(s.sales_t, s.leads_t)} (yday ${pct(s.sales_y, s.leads_y)})\n` +
+    `Payment stage: ${s.paystage_t} (yday ${s.paystage_y}) ${arrow(s.paystage_t, s.paystage_y)}\n` +
+    `API: $${cost.t.toFixed(2)} (yday $${cost.y.toFixed(2)})\n` +
+    `Pipeline: ${items.length} open${carried ? `, ${carried} carried from yesterday` : ""}${s.capi_fail ? ` | ⚠ ${s.capi_fail} tracking events FAILED` : ""}`
   );
 }
 
@@ -96,7 +96,7 @@ const AOV = 4890;
 /** Salman's action list with money at stake and carryover age. */
 async function buildSalmanList(): Promise<string> {
   const items = await opsActionItems();
-  if (!items.length) return "✅ Pipeline clear. Koi pending action nahi.";
+  if (!items.length) return "✅ Pipeline clear. Nothing pending.";
   let prev: string[] = [];
   try {
     prev = JSON.parse((await getState(`salman_items_${yesterdayKey()}`)) ?? "[]") as string[];
@@ -106,7 +106,7 @@ async function buildSalmanList(): Promise<string> {
   const atStake = items.length * AOV;
   const tier: Record<number, string> = { 1: "\u{1F534}", 2: "\u{1F7E0}", 3: "\u{1F7E1}", 4: "\u{26AA}" };
   const lines = items.slice(0, 10).map((i, n) => {
-    const old = prev.includes(i.wa_id) ? " (KAL SE PENDING)" : "";
+    const old = prev.includes(i.wa_id) ? " (PENDING SINCE YESTERDAY)" : "";
     return `${tier[i.priority] ?? ""} ${n + 1}. ${i.name ?? "?"}: ${i.note}${old}\n   wa.me/${i.wa_id}`;
   });
   try {
@@ -115,11 +115,11 @@ async function buildSalmanList(): Promise<string> {
     /* non-fatal */
   }
   return (
-    `\u{1F3AF} Action list (${items.length} leads, ~Rs ${atStake.toLocaleString()} table par)\n` +
-    `\u{1F534} payment check karo | \u{1F7E0} aaj ke garam lead | \u{1F7E1} thanda ho raha | \u{26AA} warm re-open\n` +
+    `\u{1F3AF} Action list (${items.length} leads, ~Rs ${atStake.toLocaleString()} on the table)\n` +
+    `\u{1F534} verify payment | \u{1F7E0} hot today | \u{1F7E1} cooling (1-3d) | \u{26AA} warm re-open\n` +
     lines.join("\n") +
-    (items.length > 10 ? `\n(+${items.length - 10} aur, reply "leads")` : "") +
-    `\n\nJo close ho jaye, uska screenshot aayega hi. Jo mar jaye, usay ignore. Baqi sab ko aaj hath lagna chahiye.`
+    (items.length > 10 ? `\n(+${items.length - 10} more, reply "leads")` : "") +
+    `\n\nClosed ones show up as sale pings automatically. Dead ones, skip. Everything else needs a touch today.`
   );
 }
 
@@ -131,7 +131,7 @@ async function buildSalmanPack(): Promise<string> {
   const gaps = queries.filter((q) => !q.summary.startsWith("Follow-up needed")).slice(0, 5);
   if (gaps.length) {
     parts.push(
-      `\u{1F534} Aaj bot ko human help chahiye thi:\n` +
+      `\u{1F534} Bot needed human help today:\n` +
         gaps.map((q) => `• ${q.name ?? "?"}: ${q.summary.slice(0, 80)}\n  wa.me/${q.wa_id}`).join("\n"),
     );
   }
