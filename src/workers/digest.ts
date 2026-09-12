@@ -104,9 +104,10 @@ async function buildSalmanList(): Promise<string> {
     /* first run */
   }
   const atStake = items.length * AOV;
+  const tier: Record<number, string> = { 1: "\u{1F534}", 2: "\u{1F7E0}", 3: "\u{1F7E1}", 4: "\u{26AA}" };
   const lines = items.slice(0, 10).map((i, n) => {
     const old = prev.includes(i.wa_id) ? " (KAL SE PENDING)" : "";
-    return `${n + 1}. ${i.name ?? "?"}: ${i.note}${old}\n   wa.me/${i.wa_id}`;
+    return `${tier[i.priority] ?? ""} ${n + 1}. ${i.name ?? "?"}: ${i.note}${old}\n   wa.me/${i.wa_id}`;
   });
   try {
     await setState(`salman_items_${pktDateStr()}`, JSON.stringify(items.map((i) => i.wa_id)));
@@ -114,7 +115,8 @@ async function buildSalmanList(): Promise<string> {
     /* non-fatal */
   }
   return (
-    `\u{1F3AF} Action list (${items.length} leads, ~Rs ${atStake.toLocaleString()} table par):\n` +
+    `\u{1F3AF} Action list (${items.length} leads, ~Rs ${atStake.toLocaleString()} table par)\n` +
+    `\u{1F534} payment check karo | \u{1F7E0} aaj ke garam lead | \u{1F7E1} thanda ho raha | \u{26AA} warm re-open\n` +
     lines.join("\n") +
     (items.length > 10 ? `\n(+${items.length - 10} aur, reply "leads")` : "") +
     `\n\nJo close ho jaye, uska screenshot aayega hi. Jo mar jaye, usay ignore. Baqi sab ko aaj hath lagna chahiye.`

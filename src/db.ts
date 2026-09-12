@@ -216,30 +216,43 @@ export interface ActionItem {
   name: string | null;
   wa_id: string;
   note: string;
+  priority: number;
   at: Date | null;
 }
 
 export async function opsActionItems(): Promise<ActionItem[]> {
+  // Priority tiers (owner spec 2026-09-12) + auto-expiry so the list never
+  // becomes a graveyard that buries fresh money:
+  //   P1 payment screenshot in review  — never expires (their money is held)
+  //   P2 got bank details, quiet 1-24h — hottest revenue window
+  //   P3 got bank details, quiet 1-3d  — cooling, still worth a call
+  //   P4 qualified lead, quiet 6-48h   — warm re-open
+  // Anything staler drops off on its own; a lead who reactivates re-enters.
   const res = await pool.query(
-    `SELECT 'payment_review' AS kind, c.name, c.wa_id,
-            'Payment review pending' AS note,
-            (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) AS at
-     FROM contacts c WHERE c.status = 'payment_review'
-     UNION ALL
-     SELECT 'stalled_checkout', c.name, c.wa_id,
-            'Got bank details, no screenshot yet',
-            (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
-     FROM contacts c
-     WHERE c.status = 'payment_pending'
-       AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) < now() - interval '2 hours'
-     UNION ALL
-     SELECT 'hot_lead_silent', c.name, c.wa_id,
-            'Qualified lead, silent 6+ hours',
-            (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
-     FROM contacts c
-     WHERE c.status = 'active' AND c.qualified
-       AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) < now() - interval '6 hours'
-     ORDER BY at DESC NULLS LAST LIMIT 25`,
+    `SELECT * FROM (
+       SELECT 'payment_review' AS kind, c.name, c.wa_id,
+              'Payment screenshot review pending' AS note, 1 AS priority,
+              (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) AS at
+       FROM contacts c WHERE c.status = 'payment_review'
+       UNION ALL
+       SELECT CASE WHEN (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) > now() - interval '24 hours'
+                   THEN 'stalled_hot' ELSE 'stalled_cooling' END,
+              c.name, c.wa_id, 'Got bank details, no screenshot yet',
+              CASE WHEN (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id) > now() - interval '24 hours'
+                   THEN 2 ELSE 3 END,
+              (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
+       FROM contacts c
+       WHERE c.status = 'payment_pending'
+         AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
+             BETWEEN now() - interval '72 hours' AND now() - interval '1 hour'
+       UNION ALL
+       SELECT 'hot_lead_silent', c.name, c.wa_id, 'Qualified lead, gone quiet', 4,
+              (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
+       FROM contacts c
+       WHERE c.status = 'active' AND c.qualified
+         AND (SELECT max(created_at) FROM messages m WHERE m.contact_id = c.id)
+             BETWEEN now() - interval '48 hours' AND now() - interval '6 hours'
+     ) t ORDER BY priority, at DESC LIMIT 25`,
   );
   return res.rows;
 }

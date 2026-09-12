@@ -221,8 +221,9 @@ async function replyLeads(to: string): Promise<void> {
   );
   const label: Record<string, string> = {
     payment_review: "🔴 PAYMENT REVIEW",
-    stalled_checkout: "🟠 CHECKOUT INCOMPLETE",
-    hot_lead_silent: "🟡 HOT LEAD SILENT",
+    stalled_hot: "🟠 CHECKOUT INCOMPLETE (aaj)",
+    stalled_cooling: "🟡 CHECKOUT INCOMPLETE (1-3 din)",
+    hot_lead_silent: "⚪ HOT LEAD SILENT",
   };
   const lines = items.map(
     (r) => `${label[r.kind] ?? r.kind} — ${r.name ?? "?"}\n${r.note} · last msg ${fmtPKT(r.at)}\n→ wa.me/${r.wa_id}`,
