@@ -80,6 +80,8 @@ async function main() {
   startBriefScheduler();
   const { startOpsKeepalive } = await import("./ops.js");
   startOpsKeepalive();
+  const { startOwnerAlerts } = await import("./workers/alerts.js");
+  startOwnerAlerts();
   console.log("Workers started (team brief scheduler armed)");
 
   const app = await buildServer();
