@@ -21,7 +21,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // in bot_state and refreshed before WhatsApp's ~30 day media expiry. If the
 // image file is missing, the caption still goes out as plain text.
 const LAST_REMINDER_CAPTION =
-  "Last Reminder \u{1F604} Jab ready hon to yahan text kar dein, ya www.sajawal.school pe details dekh kar khud sign up kar lein. \u{1F642}"
+  "Last Reminder \u{1F604} Jab ready hon to yahan text kar dein, ya www.sajawal.school pe details dekh kar khud sign up kar lein. \u{1F642}";
 const REMINDER_IMAGE_PATH = "assets/followup-last-reminder.jpg";
 const REMINDER_MEDIA_STATE_KEY = "followup_reminder_media";
 
