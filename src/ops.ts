@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import { sendImage, sendAudio, sendText, uploadMedia } from "./whatsapp.js";
-import { contactByWaId, funnelSummary, getRecentMessages, getState, openSupportQueries, opsActionItems, opsRangeStats, paymentScreenshot, recentSales, setState } from "./db.js";
+import { contactByWaId, funnelSummary, getHandledMap, getRecentMessages, getState, markHandled, openSupportQueries, opsActionItems, opsRangeStats, paymentScreenshot, recentSales, setState } from "./db.js";
 import { sendTeamBrief } from "./workers/digest.js";
 import { usageByDay } from "./db.js";
 
@@ -130,7 +130,18 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
     // command word. A keyword buried in a normal sentence is not a command —
     // that was dumping 7-day sales reports on the owner uninvited.
     const isCmd = (re: RegExp): boolean => t.length <= 30 && re.test(t);
-    if (/^(chat|history|transcript)\b/.test(t) && num.length >= 10) await replyChat(from, num);
+    if (isCmd(/^(all ?done|sab ?done)$/)) {
+      const handled = await getHandledMap();
+      const open = (await opsActionItems()).filter((i) => !handled[i.wa_id]);
+      const n = await markHandled(open.map((i) => i.wa_id));
+      await sendText(from, `✅ ${n} item${n === 1 ? "" : "s"} marked handled. List is clear; only new work will appear.`);
+    }
+    else if (isCmd(/^done\b/) && num.length >= 10) {
+      const waId = num.startsWith("0") ? "92" + num.slice(1) : num;
+      await markHandled([waId]);
+      await sendText(from, `✅ Marked handled: wa.me/${waId}`);
+    }
+    else if (/^(chat|history|transcript)\b/.test(t) && num.length >= 10) await replyChat(from, num);
     else if (num.length >= 11 && num.length <= 15 && /^\d+$/.test(t.replace(/[\s+-]/g, ""))) await replyChat(from, num);
     else if (isCmd(/^(cost|spend|usage|api)/)) await replyCost(from);
     else if (isCmd(/^(week|hafta|7 ?d)/)) await replyRange(from, 7, "Last 7 days");
@@ -210,7 +221,8 @@ async function replySales(to: string): Promise<void> {
 }
 
 async function replyLeads(to: string): Promise<void> {
-  const items = await opsActionItems();
+  const handled = await getHandledMap();
+  const items = (await opsActionItems()).filter((i) => !handled[i.wa_id]);
   const queries = await openSupportQueries();
   if (!items.length && !queries.length) {
     await sendText(to, "No pending actions. All clear. ✅");

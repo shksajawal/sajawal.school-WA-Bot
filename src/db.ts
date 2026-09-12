@@ -575,3 +575,35 @@ export async function apiUsageTwoDays(): Promise<
   );
   return res.rows.map((r: any) => ({ day: r.day, model: r.model, inp: Number(r.inp), outp: Number(r.outp), cr: Number(r.cr), cw: Number(r.cw) }));
 }
+
+/**
+ * Handled-item tracking for Salman's action lists. "done <number>" or
+ * "ALL DONE" marks leads handled; they vanish from lists for 72h (matching
+ * item expiry), and carryover counts then measure genuinely untouched work.
+ */
+export async function getHandledMap(): Promise<Record<string, string>> {
+  try {
+    const raw = await getState("handled_items");
+    const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    const cutoff = Date.now() - 72 * 3600_000;
+    let changed = false;
+    for (const [k, v] of Object.entries(map)) {
+      if (new Date(v).getTime() < cutoff) {
+        delete map[k];
+        changed = true;
+      }
+    }
+    if (changed) await setState("handled_items", JSON.stringify(map));
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+export async function markHandled(waIds: string[]): Promise<number> {
+  const map = await getHandledMap();
+  const now = new Date().toISOString();
+  for (const id of waIds) map[id] = now;
+  await setState("handled_items", JSON.stringify(map));
+  return waIds.length;
+}

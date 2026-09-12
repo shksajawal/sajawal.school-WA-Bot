@@ -2,6 +2,7 @@ import {
   adviceSamples,
   apiUsageTwoDays,
   followupsSentToday,
+  getHandledMap,
   getState,
   learningSamples,
   opsActionItems,
@@ -65,7 +66,13 @@ async function apiCostTodayYesterday(): Promise<{ t: number; y: number }> {
 
 /** The owner's entire daily update. Five lines of numbers, one pulse line. */
 async function buildOwnerBrief(): Promise<string> {
-  const [s, cost, items] = await Promise.all([opsDailyStats(), apiCostTodayYesterday(), opsActionItems()]);
+  const [s, cost, rawItems, handled] = await Promise.all([
+    opsDailyStats(),
+    apiCostTodayYesterday(),
+    opsActionItems(),
+    getHandledMap(),
+  ]);
+  const items = rawItems.filter((i) => !handled[i.wa_id]);
   const arrow = (t: number, y: number) => (t > y ? "▲" : t < y ? "▼" : "=");
   // Carryover: items whose wa_id already appeared in yesterday's list.
   let carried = 0;
@@ -95,7 +102,8 @@ const AOV = 4890;
 
 /** Salman's action list with money at stake and carryover age. */
 async function buildSalmanList(): Promise<string> {
-  const items = await opsActionItems();
+  const handled = await getHandledMap();
+  const items = (await opsActionItems()).filter((i) => !handled[i.wa_id]);
   if (!items.length) return "✅ Pipeline clear. Nothing pending.";
   let prev: string[] = [];
   try {
@@ -119,7 +127,7 @@ async function buildSalmanList(): Promise<string> {
     `\u{1F534} verify payment | \u{1F7E0} hot today | \u{1F7E1} cooling (1-3d) | \u{26AA} warm re-open\n` +
     lines.join("\n") +
     (items.length > 10 ? `\n(+${items.length - 10} more, reply "leads")` : "") +
-    `\n\nClosed ones show up as sale pings automatically. Dead ones, skip. Everything else needs a touch today.`
+    `\n\nClosed ones show up as sale pings automatically. Dead ones, skip. Everything else needs a touch today.\n\nAfter working a lead, reply: done 92300xxxxxxx\nWhen EVERY item is handled and nothing is left, confirm with: ALL DONE`
   );
 }
 
