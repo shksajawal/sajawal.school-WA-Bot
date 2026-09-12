@@ -201,14 +201,25 @@ export async function sendTeamBrief(_force = false, requester?: string): Promise
   }
   // Scheduled EOD: both, each their own format.
   const brief = await buildOwnerBrief();
+  const ownerFailures: string[] = [];
   for (const to of ownerTargets()) {
     try {
       await sendText(to, brief);
     } catch (err) {
       console.error("Owner daily failed:", err);
+      ownerFailures.push(to);
     }
   }
-  const pack = await buildSalmanPack();
+  // A closed WhatsApp window silently eats reports. If the owner's copy could
+  // not be delivered, a human must see it — Salman's pack carries the warning
+  // so someone can nudge him to message the bot and reopen the window.
+  let pack = await buildSalmanPack();
+  if (ownerFailures.length) {
+    pack =
+      `\u{26A0} Owner's daily brief could NOT be delivered (his 24h window is closed). ` +
+      `Please ask him to send any message to this number so reports resume.\n\n` +
+      pack;
+  }
   for (const to of supportOnly()) {
     try {
       await sendText(to, pack);
