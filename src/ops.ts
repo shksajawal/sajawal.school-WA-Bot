@@ -1,6 +1,6 @@
 import { config } from "./config.js";
 import { sendImage, sendAudio, sendText, uploadMedia } from "./whatsapp.js";
-import { contactByWaId, funnelSummary, getRecentMessages, openSupportQueries, opsActionItems, opsRangeStats, paymentScreenshot, recentSales } from "./db.js";
+import { contactByWaId, funnelSummary, getRecentMessages, getState, openSupportQueries, opsActionItems, opsRangeStats, paymentScreenshot, recentSales, setState } from "./db.js";
 import { sendTeamBrief } from "./workers/digest.js";
 import { usageByDay } from "./db.js";
 
@@ -77,6 +77,43 @@ export async function pingTeam(note: string): Promise<void> {
       console.error("Team ping failed (window likely closed):", err);
     }
   }
+}
+
+/** Remember when a team number last messaged us — their 24h window clock. */
+export async function noteOpsInbound(from: string): Promise<void> {
+  try {
+    await setState(`ops_last_in_${from}`, new Date().toISOString());
+  } catch (err) {
+    console.error("ops window note failed:", err);
+  }
+}
+
+/**
+ * Owner's rule (2026-09-12): at ~23h since a team number's last message, send
+ * a one-line reminder so a quick reply keeps their WhatsApp window open and
+ * pings/reports never silently bounce. Sent once per window.
+ */
+export function startOpsKeepalive(): NodeJS.Timeout {
+  const tick = async () => {
+    for (const to of allTargets()) {
+      try {
+        const raw = await getState(`ops_last_in_${to}`);
+        if (!raw) continue;
+        const age = Date.now() - new Date(raw).getTime();
+        if (age < 23 * 3600_000 || age > 24 * 3600_000) continue;
+        if ((await getState(`ops_keepalive_${to}`)) === raw) continue;
+        await sendText(
+          to,
+          "Session reminder: bot updates ka window ~1 hour mein expire ho raha hai. Kisi bhi reply (ok likh dein) se agle 24h active rahega 🙂",
+        );
+        await setState(`ops_keepalive_${to}`, raw);
+      } catch (err) {
+        console.error("ops keepalive failed:", err);
+      }
+    }
+  };
+  void tick();
+  return setInterval(tick, 10 * 60 * 1000);
 }
 
 export function isOpsNumber(from: string): boolean {

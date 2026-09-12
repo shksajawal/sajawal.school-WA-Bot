@@ -78,6 +78,8 @@ async function main() {
   loud(startReplyWorker());
   loud(startFollowupWorker());
   startBriefScheduler();
+  const { startOpsKeepalive } = await import("./ops.js");
+  startOpsKeepalive();
   console.log("Workers started (team brief scheduler armed)");
 
   const app = await buildServer();

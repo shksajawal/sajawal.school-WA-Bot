@@ -22,7 +22,7 @@ import {
 import { downloadMedia, markReadWithTyping, sendButtonsMessage, sendText, uploadMedia } from "../whatsapp.js";
 import { sendCapiEvent } from "../capi.js";
 import { verifyPaymentScreenshot } from "../payments.js";
-import { handleOpsMessage, isOpsNumber, pingSupport, pingTeam, pingTeamAudio } from "../ops.js";
+import { handleOpsMessage, isOpsNumber, noteOpsInbound, pingSupport, pingTeam, pingTeamAudio } from "../ops.js";
 import { matchFaq } from "../faq.js";
 import { generateReply } from "../agent/agent.js";
 
@@ -51,6 +51,7 @@ interface WebhookValue {
 async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Promise<void> {
   // Team numbers get the read-only ops interface — never the sales agent.
   if (isOpsNumber(m.from)) {
+    await noteOpsInbound(m.from);
     if (m.type === "text" && m.text?.body) await handleOpsMessage(m.from, m.text.body);
     return;
   }
