@@ -130,7 +130,16 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
     // command word. A keyword buried in a normal sentence is not a command —
     // that was dumping 7-day sales reports on the owner uninvited.
     const isCmd = (re: RegExp): boolean => t.length <= 30 && re.test(t);
-    if (isCmd(/^(all ?done|sab ?done)$/)) {
+    const isOwner = from === config.ops.adminNumber;
+    // Owner is the business owner, not an operator: handled-marking and the
+    // action queue belong to the support team (owner spec 2026-09-13).
+    if (isOwner && isCmd(/^(all ?done|sab ?done|done|leads?|pending|actions?|follow)/)) {
+      await sendText(
+        from,
+        'That is the support team\u2019s queue. For numbers, reply "update" (today), "week", "sales" or "cost".',
+      );
+    }
+    else if (isCmd(/^(all ?done|sab ?done)$/)) {
       const handled = await getHandledMap();
       const open = (await opsActionItems()).filter((i) => !handled[i.wa_id]);
       const n = await markHandled(open.map((i) => i.wa_id));
