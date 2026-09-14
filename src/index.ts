@@ -45,10 +45,11 @@ async function main() {
 
   checkCapiConfig();
 
-  // Recovery sweep: any contact whose last inbound text is unanswered and
-  // still inside the free 24h window gets a reply enqueued on boot. Added
-  // after the operator-note bug silenced advice leads (2026-09-10).
-  void (async () => {
+  // Self-healing recovery sweep: every 15 minutes, any contact whose last
+  // inbound text is unanswered and still inside the free 24h window gets a
+  // reply enqueued. Boot-only was not enough — the 2026-09-14 credit lapse
+  // stranded 34 conversations because nothing retried after the outage ended.
+  const recoverySweep = async () => {
     try {
       const { pool } = await import("./db.js");
       const res = await pool.query(
@@ -59,20 +60,24 @@ async function main() {
              AND m.created_at > now() - interval '23 hours'
            ORDER BY m.contact_id, m.created_at DESC)
          SELECT li.contact_id, li.id FROM last_in li
-         WHERE NOT EXISTS (
-           SELECT 1 FROM messages o WHERE o.contact_id = li.contact_id
-             AND o.direction='out' AND o.created_at > li.created_at)
+         WHERE li.created_at < now() - interval '5 minutes'
+           AND NOT EXISTS (
+             SELECT 1 FROM messages o WHERE o.contact_id = li.contact_id
+               AND o.direction='out' AND o.created_at > li.created_at)
          LIMIT 300`,
       );
+      if (!res.rows.length) return;
       const { enqueueReply } = await import("./queue.js");
       for (const row of res.rows) {
         await enqueueReply({ contactId: row.contact_id, afterMessageId: row.id });
       }
-      if (res.rows.length) console.log(`Recovery: enqueued replies for ${res.rows.length} hanging conversations`);
+      console.log(`Recovery sweep: enqueued replies for ${res.rows.length} hanging conversations`);
     } catch (err) {
       console.error("Recovery sweep failed:", err);
     }
-  })();
+  };
+  void recoverySweep();
+  setInterval(recoverySweep, 15 * 60 * 1000);
 
   loud(startInboundWorker());
   loud(startReplyWorker());

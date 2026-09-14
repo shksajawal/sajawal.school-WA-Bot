@@ -35,6 +35,11 @@ const REPLY_DEBOUNCE_MS = 6000;
 export async function enqueueReply(job: ReplyJob): Promise<void> {
   await replyQueue.add("reply", job, {
     delay: REPLY_DEBOUNCE_MS,
+    // Retries with backoff: an Anthropic outage or credit lapse used to drop
+    // the customer's reply permanently (2026-09-14 incident, 34 conversations
+    // lost). Five attempts over ~25 minutes ride out short failures.
+    attempts: 5,
+    backoff: { type: "exponential", delay: 60_000 },
     removeOnComplete: 1000,
     removeOnFail: 5000,
   });

@@ -66,6 +66,21 @@ async function checkAll(): Promise<void> {
     );
   }
 
+  // 1b. AI DOWN — traffic is flowing but no model calls are landing. This is
+  // the credit-lapse / API-outage signature (2026-09-14): scripted messages
+  // keep going out, so "bot is replying" looks fine while real answers die.
+  const recentCalls = await num(`
+    SELECT count(*)::int AS n FROM api_usage WHERE created_at > now() - interval '25 minutes'`);
+  const recentInbound = await num(`
+    SELECT count(*)::int AS n FROM messages
+    WHERE direction='in' AND msg_type='text' AND created_at > now() - interval '25 minutes'`);
+  if (recentCalls === 0 && recentInbound >= 10) {
+    await fireOnce(
+      "alert_ai_down",
+      `\u{1F6A8} AI NOT RESPONDING: ${recentInbound} customer messages in 25 min and zero Claude calls. Usually Anthropic credits or API key. Scripted messages still send, so chats look alive but real answers are dead.`,
+    );
+  }
+
   // 2. TRACKING BROKEN — Meta events failing.
   const capiFail = await num(`
     SELECT count(*)::int AS n FROM capi_events
