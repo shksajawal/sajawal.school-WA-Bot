@@ -11,6 +11,7 @@ import {
   getContact,
   getRecentMessages,
   insertMessage,
+  recordMessageStatus,
   insertPayment,
   latestInboundMessageId,
   claimDripStep,
@@ -45,7 +46,15 @@ interface WebhookMessage {
 interface WebhookValue {
   contacts?: Array<{ profile?: { name?: string }; wa_id: string }>;
   messages?: WebhookMessage[];
-  statuses?: unknown[];
+  statuses?: WebhookStatus[];
+}
+
+/** Delivery receipt for one outbound message (sent / delivered / read / failed). */
+interface WebhookStatus {
+  id?: string;
+  status?: string;
+  recipient_id?: string;
+  errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>;
 }
 
 async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Promise<void> {
@@ -424,7 +433,23 @@ export function startInboundWorker(): Worker {
       for (const m of value.messages ?? []) {
         await handleInboundMessage(value, m);
       }
-      // Delivery/read statuses are ignored for now
+      // Delivery receipts: recorded, never acted on. Meta accepting a send is
+      // not delivery; this is the only place the difference shows up.
+      for (const s of value.statuses ?? []) {
+        if (!s.id || !s.status) continue;
+        const e = s.errors?.[0];
+        try {
+          await recordMessageStatus({
+            waMessageId: s.id,
+            recipient: s.recipient_id ?? null,
+            status: s.status,
+            errorCode: typeof e?.code === "number" ? e.code : null,
+            errorDetail: e ? [e.title, e.message, e.error_data?.details].filter(Boolean).join(" | ").slice(0, 500) : null,
+          });
+        } catch (err) {
+          console.error("status record failed:", err);
+        }
+      }
     },
     { connection, concurrency: 8 },
   );

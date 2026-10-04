@@ -1,4 +1,5 @@
 import { config } from "./config.js";
+import { recordTeamSend } from "./db.js";
 
 const base = () => `https://graph.facebook.com/${config.whatsapp.graphVersion}`;
 
@@ -20,13 +21,35 @@ async function graphPost(path: string, body: unknown): Promise<any> {
 
 /** Send a free-form text message (only valid inside the 24h customer service window). */
 export async function sendText(to: string, body: string): Promise<string | null> {
-  const json = await graphPost(`${config.whatsapp.phoneNumberId}/messages`, {
-    messaging_product: "whatsapp",
-    to,
-    type: "text",
-    text: { body, preview_url: true },
-  });
-  return json.messages?.[0]?.id ?? null;
+  const isTeam = teamNumbers().includes(to);
+  try {
+    const json = await graphPost(`${config.whatsapp.phoneNumberId}/messages`, {
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body, preview_url: true },
+    });
+    const id: string | null = json.messages?.[0]?.id ?? null;
+    if (isTeam) await auditTeamSend(to, body, id, null);
+    return id;
+  } catch (err) {
+    if (isTeam) await auditTeamSend(to, body, null, String(err).slice(0, 500));
+    throw err;
+  }
+}
+
+/** Owner / support numbers: every send to them is audited (team_sends). */
+const teamNumbers = (): string[] =>
+  [config.ops.adminNumber, config.ops.supportNumber, config.opsAlertNumber].filter(
+    (n): n is string => Boolean(n),
+  );
+
+async function auditTeamSend(to: string, body: string, id: string | null, error: string | null): Promise<void> {
+  try {
+    await recordTeamSend({ recipient: to, waMessageId: id, ok: error === null, error, bodyPreview: body.slice(0, 80) });
+  } catch (err) {
+    console.error("team send audit failed:", err);
+  }
 }
 
 /** Send a pre-approved template message (required outside the 24h window). */

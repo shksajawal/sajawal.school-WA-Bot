@@ -104,3 +104,31 @@ CREATE INDEX IF NOT EXISTS idx_api_usage_created ON api_usage(created_at);
 -- Advice-funnel leads (free-advice CTWA campaign, 2026-09-09): counselled,
 -- not sold. Detected by the campaign's prefill "i need advice".
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS funnel TEXT NOT NULL DEFAULT 'course';
+
+-- Delivery receipts (2026-10-05). Meta sends a status webhook (sent /
+-- delivered / read / failed + error code) for every outbound message; the
+-- worker used to discard them. Stored so a message Meta ACCEPTED but never
+-- delivered (owner's reports, 2026-10-04) has an explanation on record.
+CREATE TABLE IF NOT EXISTS message_status (
+  id SERIAL PRIMARY KEY,
+  wa_message_id TEXT NOT NULL,
+  recipient TEXT,
+  status TEXT NOT NULL,
+  error_code INT,
+  error_detail TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_message_status_recipient ON message_status(recipient, id);
+
+-- Every send attempt to a team number (owner / support): the accepted wamid
+-- or the Graph error. Ops replies are never stored in messages, so without
+-- this a bounced report or alert is invisible.
+CREATE TABLE IF NOT EXISTS team_sends (
+  id SERIAL PRIMARY KEY,
+  recipient TEXT NOT NULL,
+  wa_message_id TEXT,
+  ok BOOLEAN NOT NULL,
+  error TEXT,
+  body_preview TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

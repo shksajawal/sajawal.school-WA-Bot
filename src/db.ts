@@ -607,3 +607,33 @@ export async function markHandled(waIds: string[]): Promise<number> {
   await setState("handled_items", JSON.stringify(map));
   return waIds.length;
 }
+
+/** Delivery receipt from Meta's status webhook (see schema: message_status). */
+export async function recordMessageStatus(opts: {
+  waMessageId: string;
+  recipient: string | null;
+  status: string;
+  errorCode: number | null;
+  errorDetail: string | null;
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO message_status (wa_message_id, recipient, status, error_code, error_detail)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [opts.waMessageId, opts.recipient, opts.status, opts.errorCode, opts.errorDetail],
+  );
+}
+
+/** Audit row for every send to a team number (see schema: team_sends). */
+export async function recordTeamSend(opts: {
+  recipient: string;
+  waMessageId: string | null;
+  ok: boolean;
+  error: string | null;
+  bodyPreview: string;
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO team_sends (recipient, wa_message_id, ok, error, body_preview)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [opts.recipient, opts.waMessageId, opts.ok, opts.error, opts.bodyPreview],
+  );
+}
