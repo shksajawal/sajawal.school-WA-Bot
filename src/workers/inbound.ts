@@ -421,6 +421,40 @@ async function sendBotText(contact: Contact, text: string): Promise<void> {
   await insertMessage({ contactId: contact.id, waMessageId: waMsgId, direction: "out", body: text });
 }
 
+/**
+ * AI replies only (owner's rule 2026-10-05: short, natural, human texting).
+ * The model still slips into markdown and long blocks, so this enforces it:
+ * strip formatting, and send each blank-line block as its own message, the
+ * way people actually text. Payment details are never touched.
+ */
+export function splitAgentReply(text: string, bankDetails: string): string[] {
+  const bankLines = bankDetails.split("\n").map((l) => l.trim()).filter((l) => l.length >= 8);
+  // Account numbers / IBANs (the prompt may quote them from the knowledge base)
+  if (bankLines.some((l) => text.includes(l)) || /\d{10,}|PK\d{2}[A-Z]{4}/.test(text.replace(/[\s-]/g, ""))) {
+    return [text.trim()];
+  }
+  const clean = text
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, "")
+    .replace(/^#+\s*/gm, "")
+    .replace(/\s*—\s*/g, ", ")
+    .replace(/\s+–\s+/g, ", ") // spaced en dash only; "5–7" ranges stay
+    .replace(/;\s*/g, ", ");
+  const parts = clean.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 3) return parts.length ? parts : [text.trim()];
+  return [parts[0], parts[1], parts.slice(2).join("\n")];
+}
+
+async function sendAgentReply(contact: Contact, text: string): Promise<void> {
+  const parts = splitAgentReply(text, config.payment.bankDetails);
+  for (let i = 0; i < parts.length; i++) {
+    // A short pause keeps bubbles in order and reads like typing.
+    if (i > 0) await new Promise((r) => setTimeout(r, 1200));
+    await sendBotText(contact, parts[i]);
+  }
+}
+
 async function alertOps(contact: Contact, note: string): Promise<void> {
   await pingSupport(`${note}\nCustomer: ${contact.name ?? "?"} (wa.me/${contact.wa_id})`);
 }
@@ -484,7 +518,7 @@ export function startReplyWorker(): Worker {
       const reply = await generateReply(contact, history, note);
       if (!reply) return;
 
-      await sendBotText(contact, reply);
+      await sendAgentReply(contact, reply);
 
       // Every bot reply (re)arms the follow-up timer for non-buyers
       if (contact.status !== "purchased" && contact.last_user_msg_at) {
