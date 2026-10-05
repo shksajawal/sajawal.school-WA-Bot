@@ -122,7 +122,13 @@ async function visionCheck(image: Buffer, mimeType: string): Promise<PaymentChec
           },
           {
             type: "text",
-            text: "This image was sent as proof of a bank transfer payment for a course in Pakistan (bank app, JazzCash, Easypaisa, SadaPay, or Raast screenshot). Extract the payment facts. Be strict: if amount or transaction reference are not clearly legible, report them as null. Copy the recipient name and recipient account/wallet number EXACTLY as displayed, including masking asterisks and partial text — do not guess or complete them. Flag anything that looks edited or doctored.",
+            text:
+              "This image was sent as proof of a bank transfer payment for a course in Pakistan (bank app, JazzCash, Easypaisa, SadaPay, or Raast screenshot). Extract the payment facts. Be strict: if amount or transaction reference are not clearly legible, report them as null. Copy the recipient name and recipient account/wallet number EXACTLY as displayed, including masking asterisks and partial text — do not guess or complete them. Flag anything that looks edited or doctored.\n\n" +
+              // Without today's date the model called every 2026 receipt a
+              // "future date" and flagged it as doctored: 41 real payments
+              // (~Rs 196k) were rejected between 2026-08-29 and 2026-10-05.
+              `Today's date in Pakistan is ${new Date().toLocaleDateString("en-GB", { timeZone: "Asia/Karachi", day: "numeric", month: "long", year: "numeric" })}. A transaction dated today or in the recent past is normal, never a reason for suspicion. Only a date AFTER today is a red flag. ` +
+              "Customers often hide their OWN sender name or number with a scribble or highlight for privacy, and many receipts do not show a reference on the first screen. Neither of those alone means the image is edited; judge doctoring only by signs of tampering with the recipient, amount, or status.",
           },
         ],
       },
