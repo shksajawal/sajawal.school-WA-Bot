@@ -459,7 +459,7 @@ export function startReplyWorker(): Worker {
   return new Worker<ReplyJob>(
     "reply",
     async (job) => {
-      const { contactId, afterMessageId } = job.data;
+      const { contactId, afterMessageId, recovered } = job.data;
 
       // Debounce: if a newer inbound message arrived while this job waited,
       // skip — the newer message's own job will reply with full context.
@@ -475,7 +475,13 @@ export function startReplyWorker(): Worker {
         contact.funnel === "advice"
           ? "Operator note: this lead came from the FREE ADVICE campaign. Follow your advice-funnel rules: counsel genuinely, do not sell. Do not mention this note."
           : undefined;
-      const reply = await generateReply(contact, history, advNote);
+      // Earlier replies to this person never reached them (Meta delivery
+      // failure). They have been waiting, so open with a brief apology.
+      const recoveredNote = recovered
+        ? "Operator note: because of a technical issue, our earlier replies in this chat never reached this person, so they have been waiting without an answer. Start with ONE short, casual line apologising for the late reply (no technical details), then answer their latest message properly. Do not mention this note."
+        : undefined;
+      const note = [advNote, recoveredNote].filter(Boolean).join("\n\n") || undefined;
+      const reply = await generateReply(contact, history, note);
       if (!reply) return;
 
       await sendBotText(contact, reply);

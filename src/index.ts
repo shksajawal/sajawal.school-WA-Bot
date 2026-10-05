@@ -59,17 +59,30 @@ async function main() {
            WHERE m.direction='in' AND m.msg_type='text'
              AND m.created_at > now() - interval '23 hours'
            ORDER BY m.contact_id, m.created_at DESC)
-         SELECT li.contact_id, li.id FROM last_in li
+         SELECT li.contact_id, li.id,
+           EXISTS (SELECT 1 FROM messages f JOIN message_status s ON s.wa_message_id = f.wa_message_id
+                   WHERE f.contact_id = li.contact_id AND f.direction='out'
+                     AND f.created_at > li.created_at AND s.status='failed') AS recovered
+         FROM last_in li
          WHERE li.created_at < now() - interval '5 minutes'
+           -- A reply Meta failed to deliver (2026-10 billing outage) is not an
+           -- answer. Only replies with no 'failed' receipt count.
            AND NOT EXISTS (
              SELECT 1 FROM messages o WHERE o.contact_id = li.contact_id
-               AND o.direction='out' AND o.created_at > li.created_at)
+               AND o.direction='out' AND o.created_at > li.created_at
+               AND NOT EXISTS (SELECT 1 FROM message_status s
+                               WHERE s.wa_message_id = o.wa_message_id AND s.status='failed'))
+           -- Cap: if Meta is still failing sends, stop after 3 failed attempts
+           -- instead of re-generating a reply every 15 minutes.
+           AND (SELECT count(*) FROM messages f JOIN message_status s ON s.wa_message_id = f.wa_message_id
+                WHERE f.contact_id = li.contact_id AND f.direction='out'
+                  AND f.created_at > li.created_at AND s.status='failed') < 3
          LIMIT 300`,
       );
       if (!res.rows.length) return;
       const { enqueueReply } = await import("./queue.js");
       for (const row of res.rows) {
-        await enqueueReply({ contactId: row.contact_id, afterMessageId: row.id });
+        await enqueueReply({ contactId: row.contact_id, afterMessageId: row.id, recovered: row.recovered });
       }
       console.log(`Recovery sweep: enqueued replies for ${res.rows.length} hanging conversations`);
     } catch (err) {

@@ -21,6 +21,8 @@ export interface ReplyJob {
   contactId: number;
   /** The inbound message row that triggered this job — used for debouncing. */
   afterMessageId: number;
+  /** Set by the recovery sweep when earlier bot replies failed to deliver. */
+  recovered?: boolean;
 }
 
 export interface FollowupJob {

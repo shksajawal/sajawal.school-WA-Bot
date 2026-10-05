@@ -109,7 +109,12 @@ export async function getRecentMessages(contactId: number, limit = 24): Promise<
   const res = await pool.query<StoredMessage>(
     `SELECT * FROM (
        SELECT id, contact_id, direction, msg_type, body
-       FROM messages WHERE contact_id = $1 ORDER BY id DESC LIMIT $2
+       FROM messages m WHERE contact_id = $1
+         -- Meta accepted but never delivered (status webhook 'failed'): the
+         -- customer never saw it, so the model must not think it was said.
+         AND NOT EXISTS (SELECT 1 FROM message_status s
+                         WHERE s.wa_message_id = m.wa_message_id AND s.status = 'failed')
+       ORDER BY id DESC LIMIT $2
      ) sub ORDER BY id ASC`,
     [contactId, limit],
   );
