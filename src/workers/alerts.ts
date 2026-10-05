@@ -58,7 +58,10 @@ async function checkAll(): Promise<void> {
     SELECT count(*)::int AS n FROM tin
     WHERE NOT EXISTS (
       SELECT 1 FROM messages o WHERE o.contact_id = tin.contact_id
-        AND o.direction='out' AND o.created_at > tin.created_at)`);
+        AND o.direction='out' AND o.created_at > tin.created_at
+        -- a reply Meta failed to deliver is not a reply
+        AND NOT EXISTS (SELECT 1 FROM message_status s
+                        WHERE s.wa_message_id = o.wa_message_id AND s.status = 'failed'))`);
   if (hanging >= 15) {
     await fireOnce(
       "alert_system_down",
@@ -78,6 +81,55 @@ async function checkAll(): Promise<void> {
     await fireOnce(
       "alert_ai_down",
       `\u{1F6A8} AI NOT RESPONDING: ${recentInbound} customer messages in 25 min and zero Claude calls. Usually Anthropic credits or API key. Scripted messages still send, so chats look alive but real answers are dead.`,
+    );
+  }
+
+  // 1c. ACCOUNT BLOCKED — Meta's own health check on the WhatsApp account.
+  // The 2026-10-02 billing outage (141006 / 131042) silently failed every
+  // non-ad reply for 3 days: Graph ACCEPTED each send, the failure only came
+  // back later as a status webhook. This catches it at the account level.
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${config.whatsapp.graphVersion}/${config.whatsapp.wabaId}?fields=health_status`,
+      { headers: { Authorization: `Bearer ${config.whatsapp.accessToken}` } },
+    );
+    const json: any = await res.json().catch(() => ({}));
+    const hs = json?.health_status;
+    if (res.ok && hs?.can_send_message === "BLOCKED") {
+      const reasons = (hs.entities ?? [])
+        .filter((e: any) => e.entity_type !== "PHONE_NUMBER" && e.can_send_message === "BLOCKED")
+        .flatMap((e: any) => (e.errors ?? []).map((x: any) => `${x.error_code}: ${x.error_description}`));
+      await fireOnce(
+        "alert_waba_blocked",
+        `\u{1F6A8} WHATSAPP ACCOUNT BLOCKED by Meta. Customers may not be receiving replies.\n${reasons.join("\n") || "No reason given"}\nFix in Business Settings > Billing, then tell Claude.`,
+      );
+    }
+  } catch (err) {
+    console.error("WABA health check failed:", err);
+  }
+
+  // 1d. DELIVERY FAILING — Meta accepts sends but reports them failed.
+  // 131047 (24h window closed) is excluded: that is normal for late sends.
+  const delivery = await pool.query(`
+    WITH last AS (
+      SELECT DISTINCT ON (wa_message_id) wa_message_id, status, error_code, error_detail
+      FROM message_status
+      WHERE created_at > now() - interval '60 minutes'
+        AND status IN ('delivered', 'read', 'failed')
+        AND coalesce(error_code, 0) <> 131047
+      ORDER BY wa_message_id, (status = 'failed') DESC)
+    SELECT count(*) FILTER (WHERE status = 'failed')::int AS failed,
+           count(*)::int AS total,
+           (SELECT error_code || ' ' || split_part(coalesce(error_detail, ''), ' | ', 1)
+              FROM last WHERE status = 'failed'
+              GROUP BY 1 ORDER BY count(*) DESC LIMIT 1) AS top
+    FROM last`);
+  const df = Number(delivery.rows[0]?.failed ?? 0);
+  const dt = Number(delivery.rows[0]?.total ?? 0);
+  if (df >= 8 && df / dt >= 0.25) {
+    await fireOnce(
+      "alert_delivery",
+      `\u{1F6A8} MESSAGES NOT DELIVERING: Meta failed ${df} of ${dt} bot messages in the last hour (top error ${delivery.rows[0]?.top ?? "?"}). Customers are not getting replies. Tell Claude now.`,
     );
   }
 
