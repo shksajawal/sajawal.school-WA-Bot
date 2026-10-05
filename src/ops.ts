@@ -124,6 +124,11 @@ export function isOpsNumber(from: string): boolean {
 
 export async function handleOpsMessage(from: string, text: string): Promise<void> {
   const t = text.trim().toLowerCase();
+  // Last message from each team number, so an outside check-in can read a
+  // simple "all done" without the team updating item by item (owner 2026-10-05).
+  await setState(`ops_last_text_${from}`, JSON.stringify({ at: new Date().toISOString(), text: text.slice(0, 500) })).catch(
+    (err) => console.error("ops last text note failed:", err),
+  );
   try {
     const num = t.replace(/[^0-9]/g, "");
     // Commands must be deliberate: a short message that STARTS with the
@@ -139,7 +144,7 @@ export async function handleOpsMessage(from: string, text: string): Promise<void
         'That is the support team\u2019s queue. For numbers, reply "update" (today), "week", "sales" or "cost".',
       );
     }
-    else if (isCmd(/^(all ?done|sab ?done)$/)) {
+    else if (isCmd(/^(all ?done|sab ?done|done|ho ?gaya|ho ?gay[ae]|kar ?diya|sab ?kar ?diya|sab ?ho ?gaya|completed?|finished)[.! ]*$/)) {
       const handled = await getHandledMap();
       const open = (await opsActionItems()).filter((i) => !handled[i.wa_id]);
       const n = await markHandled(open.map((i) => i.wa_id));
