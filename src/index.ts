@@ -52,6 +52,21 @@ async function main() {
   const recoverySweep = async () => {
     try {
       const { pool } = await import("./db.js");
+      // Outage guard (2026-10-11): while Meta is failing deliveries broadly
+      // (billing blocks on Oct 2 and Oct 9), retrying only burns attempts.
+      // Pause until delivery recovers, then everyone in-window gets retried.
+      const health = await pool.query(
+        `SELECT count(*) FILTER (WHERE status = 'failed')::int AS failed, count(*)::int AS total
+         FROM message_status
+         WHERE created_at > now() - interval '30 minutes'
+           AND status IN ('delivered', 'read', 'failed')
+           AND coalesce(error_code, 0) <> 131047`,
+      );
+      const { failed, total } = health.rows[0] ?? { failed: 0, total: 0 };
+      if (failed >= 5 && failed / Math.max(total, 1) >= 0.25) {
+        console.warn(`Recovery sweep paused: Meta failed ${failed}/${total} deliveries in 30 min`);
+        return;
+      }
       const res = await pool.query(
         `WITH last_in AS (
            SELECT DISTINCT ON (m.contact_id) m.contact_id, m.id, m.created_at
@@ -72,11 +87,13 @@ async function main() {
                AND o.direction='out' AND o.created_at > li.created_at
                AND NOT EXISTS (SELECT 1 FROM message_status s
                                WHERE s.wa_message_id = o.wa_message_id AND s.status='failed'))
-           -- Cap: if Meta is still failing sends, stop after 3 failed attempts
-           -- instead of re-generating a reply every 15 minutes.
+           -- Cap per contact: 3 failed attempts in the last 2 hours. Counting
+           -- only recent failures means an outage that has ended (guard above)
+           -- no longer blocks the retry; a contact Meta keeps rejecting still stops.
            AND (SELECT count(*) FROM messages f JOIN message_status s ON s.wa_message_id = f.wa_message_id
                 WHERE f.contact_id = li.contact_id AND f.direction='out'
-                  AND f.created_at > li.created_at AND s.status='failed') < 3
+                  AND f.created_at > li.created_at AND s.status='failed'
+                  AND f.created_at > now() - interval '2 hours') < 3
          LIMIT 300`,
       );
       if (!res.rows.length) return;
