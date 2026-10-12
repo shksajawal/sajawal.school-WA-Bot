@@ -88,8 +88,14 @@ const FAQS: Faq[] = [
   {
     id: "sajawal_direct",
     test: /\b(sajawal|shaikh|sheikh)\b.*\b(baat|talk|direct|khud|contact|milna)\b|\b(talk|speak) to sajawal\b/i,
-    en: "Sajawal is active inside the community, and he leads most of the live calls. On WhatsApp you're talking to the team.\n\nOne on one mentorship is a separate thing, I can pass that to the team if you want.",
-    ur: "Sajawal community ke andar active rehte hain, aur zyada tar live calls wo khud lete hain. WhatsApp pe aap team se baat kar rahe hain.\n\nOne on one mentorship alag cheez hai, chahein to main team ko bata deta hoon.",
+    en: "Sajawal is active inside the community, and he leads most of the live calls. On WhatsApp you're talking to the team.\n\nFor one on one time with him there's a separate coaching program: www.sajawal.school/coaching",
+    ur: "Sajawal community ke andar active rehte hain, aur zyada tar live calls wo khud lete hain. WhatsApp pe aap team se baat kar rahe hain.\n\nUnke sath one on one ke liye alag coaching program hai: www.sajawal.school/coaching",
+  },
+  {
+    id: "coaching",
+    test: /\b(coaching|coach|mentorship|mentor|one[- ]on[- ]one|1[- ]on[- ]1|1-1|personal(ly)? (guide|guidance|training))\b/i,
+    en: "Coaching with Sajawal is a separate program from the course. All the details, plans and prices are here: www.sajawal.school/coaching\n\nAny question about it, the team is on 0315 7603891.",
+    ur: "Sajawal ke sath coaching course se alag program hai. Saari details, plans aur prices yahan hain: www.sajawal.school/coaching\n\nUs baare mein koi sawal ho to team 0315 7603891 pe hai.",
   },
   {
     id: "done_for_you",
