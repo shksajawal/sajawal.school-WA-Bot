@@ -146,6 +146,22 @@ export async function generateReply(
     (contact.funnel !== "advice" && inboundDepth >= 8);
   const chatModel = isMoneyMoment ? config.anthropic.escalationModel : config.anthropic.model;
 
+  // Per-reply voice reminder (2026-10-12). The voice rules sit deep in an
+  // 18k-token prompt and the cheaper model loses them by the time it writes:
+  // wrong language, "aap" mixed with "ho", 3-bubble essays. Three lines right
+  // before the conversation, uncached (tiny), keyed to the customer's last
+  // message, hold the voice at a fraction of the escalation model's cost.
+  const lang = /[\u0600-\u06FF]/.test(lastInbound)
+    ? "Urdu script"
+    : /\b(hai|hain|ka|ki|ke|kya|mein|main|nahi|nhi|aap|ap|kaise|kese|kitna|chahiye|krna|karna|hy|mujhe|mujhy|kr|ho|ji|sir)\b/i.test(lastInbound)
+      ? "Roman Urdu"
+      : "English";
+  const voiceReminder =
+    `Reply rules for THIS message: the customer wrote in ${lang}, so reply in ${lang} only. ` +
+    "One or two short lines (under 160 characters) unless they explicitly asked for details. " +
+    "Address them as aap with hain/dein/karein, never ho/kar dena. No markdown, no bullets, no stock openers like Perfect/Bilkul/Got it. " +
+    "Never state income figures, results, or facts not in your knowledge base.";
+
   const finalMessage = await client.beta.messages.toolRunner({
     model: chatModel,
     // Replies are capped at ~400 chars by the prompt; 1024 tokens is triple
@@ -163,6 +179,7 @@ export async function generateReply(
       // cached prefix. A "system" role inside messages is rejected by the
       // API — that bug silenced every advice-funnel reply until 2026-09-10.
       ...(operatorNote ? [{ type: "text" as const, text: operatorNote }] : []),
+      { type: "text" as const, text: voiceReminder },
     ],
     tools: buildTools(contact),
     messages,
