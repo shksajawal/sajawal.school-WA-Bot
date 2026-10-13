@@ -93,7 +93,7 @@ const FAQS: Faq[] = [
   },
   {
     id: "coaching",
-    test: /\b(coaching|coach|mentorship|mentor|one[- ]on[- ]one|1[- ]on[- ]1|1-1|personal(ly)? (guide|guidance|training))\b/i,
+    test: /\b(coaching|coach|mentorship|mentor)\b/i,
     en: "Coaching with Sajawal is a separate program from the course. All the details, plans and prices are here: www.sajawal.school/coaching\n\nAny question about it, the team is on 0315 7603891.",
     ur: "Sajawal ke sath coaching course se alag program hai. Saari details, plans aur prices yahan hain: www.sajawal.school/coaching\n\nUs baare mein koi sawal ho to team 0315 7603891 pe hai.",
   },

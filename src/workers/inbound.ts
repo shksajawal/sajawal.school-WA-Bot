@@ -389,9 +389,27 @@ async function runDrip(contact: Contact, body: string): Promise<boolean> {
   const won = await claimDripStep(contact.id, 0, 5);
   contact.drip_step = 5;
   if (!won) return true;
+  // Ad prefills are real questions and the opener never answered them (audit
+  // 2026-10-05: 2,264 "course duration" leads at 1.4% vs 3.9% for "more
+  // details"). One short answer first, then the opener. Ad chats are inside
+  // the free 72h window, so this bubble costs nothing.
+  const prefill = prefillAnswer(text);
+  if (prefill) await sendBotText(contact, prefill);
   await sendOpenerMenu(contact);
   await armFollowup(contact);
   return true;
+}
+
+/** Meta's pre-filled ad questions, answered in one line before the opener. */
+function prefillAnswer(firstMessage: string): string | null {
+  const t = firstMessage.toLowerCase();
+  if (/course duration/.test(t))
+    return "8 week structured plan, but everything is recorded with lifetime access, so you go at your own pace and can start today.";
+  if (/payment plans?/.test(t))
+    return "No installments, it's a one time payment with lifetime access: Core Rs 3,900 or Advance Rs 8,700.";
+  if (/certification provided/.test(t))
+    return "Yes, a certificate is available on request once you're through the program.";
+  return null;
 }
 
 /**
