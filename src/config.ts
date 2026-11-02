@@ -75,6 +75,16 @@ export const config = {
     maxTouches: Number(optional("FOLLOWUP_MAX_TOUCHES") ?? 2),
   },
 
+  reply: {
+    // Meta bills every bubble as its own message (per-message pricing since
+    // 2026-10-01), so each extra bubble is pure cost. Replay of 30 days of
+    // real replies (2026-11-03): a cap of 2 saved 8% of sends, a cap of 1
+    // saved 37%. Default is one bubble; raise REPLY_MAX_BUBBLES to split long
+    // replies again (then REPLY_SPLIT_MIN_CHARS is the length that may split).
+    maxBubbles: Math.max(1, Number(optional("REPLY_MAX_BUBBLES") ?? 1)),
+    splitMinChars: Math.max(0, Number(optional("REPLY_SPLIT_MIN_CHARS") ?? 200)),
+  },
+
   leads: {
     apiKey: required("LEADS_API_KEY"),
     openerTemplateName: optional("LEAD_OPENER_TEMPLATE_NAME") ?? "website_lead_opener",

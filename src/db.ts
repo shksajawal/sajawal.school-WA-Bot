@@ -123,7 +123,9 @@ export async function getRecentMessages(contactId: number, limit = 24): Promise<
 
 export async function latestInboundMessageId(contactId: number): Promise<number | null> {
   const res = await pool.query<{ id: number }>(
-    `SELECT id FROM messages WHERE contact_id = $1 AND direction = 'in' ORDER BY id DESC LIMIT 1`,
+    // Reactions are gestures, not messages: one arriving while a reply is
+    // queued must not debounce that reply away.
+    `SELECT id FROM messages WHERE contact_id = $1 AND direction = 'in' AND msg_type <> 'reaction' ORDER BY id DESC LIMIT 1`,
     [contactId],
   );
   return res.rows[0]?.id ?? null;

@@ -101,7 +101,12 @@ async function handleInboundMessage(value: WebhookValue, m: WebhookMessage): Pro
   });
   if (dbMsgId === null) return;
 
-  await updateContact(contact.id, { last_user_msg_at: new Date(), followup_count: 0 });
+  // A reaction is not a customer message in Meta's 24h window, so it must not
+  // move our clock either: a follow-up timed off a reaction lands after the
+  // real window closes and fails (131047). Stickers are real messages and count.
+  if (m.type !== "reaction") {
+    await updateContact(contact.id, { last_user_msg_at: new Date(), followup_count: 0 });
+  }
   // Typing indicator ONLY for messages that will get a reply. Showing it on
   // voice notes/stickers (which we deliberately never answer) reads as "the
   // AI typed and never sent" — a real ad-comment complaint.
@@ -442,10 +447,19 @@ async function sendBotText(contact: Contact, text: string): Promise<void> {
 /**
  * AI replies only (owner's rule 2026-10-05: short, natural, human texting).
  * The model still slips into markdown and long blocks, so this enforces it:
- * strip formatting, and send each blank-line block as its own message, the
- * way people actually text. Payment details are never touched.
+ * strip formatting, and split long replies on blank lines the way people
+ * text. Payment details are never touched.
+ *
+ * Cost rule (2026-11-03): Meta bills per bubble, and the split was running at
+ * 1.45 bubbles per reply. A reply at or under `splitMinChars` is always ONE
+ * bubble; longer ones split to at most `maxBubbles`.
  */
-export function splitAgentReply(text: string, bankDetails: string): string[] {
+export function splitAgentReply(
+  text: string,
+  bankDetails: string,
+  maxBubbles: number = config.reply.maxBubbles,
+  splitMinChars: number = config.reply.splitMinChars,
+): string[] {
   const bankLines = bankDetails.split("\n").map((l) => l.trim()).filter((l) => l.length >= 8);
   // Account numbers / IBANs (the prompt may quote them from the knowledge base)
   if (bankLines.some((l) => text.includes(l)) || /\d{10,}|PK\d{2}[A-Z]{4}/.test(text.replace(/[\s-]/g, ""))) {
@@ -460,8 +474,12 @@ export function splitAgentReply(text: string, bankDetails: string): string[] {
     .replace(/\s+–\s+/g, ", ") // spaced en dash only; "5–7" ranges stay
     .replace(/;\s*/g, ", ");
   const parts = clean.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  if (parts.length <= 3) return parts.length ? parts : [text.trim()];
-  return [parts[0], parts[1], parts.slice(2).join("\n")];
+  if (!parts.length) return [text.trim()];
+  if (parts.length === 1 || maxBubbles <= 1 || clean.trim().length <= splitMinChars) {
+    return [parts.join("\n")];
+  }
+  if (parts.length <= maxBubbles) return parts;
+  return [...parts.slice(0, maxBubbles - 1), parts.slice(maxBubbles - 1).join("\n")];
 }
 
 async function sendAgentReply(contact: Contact, text: string): Promise<void> {
