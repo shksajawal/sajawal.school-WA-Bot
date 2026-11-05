@@ -61,8 +61,13 @@ export const config = {
     bankDetails: required("BANK_DETAILS").replace(/\\n/g, "\n"),
     // A screenshot within this % of any valid amount still verifies — people
     // send slightly more or less (fees, rounding) and shouldn't be bounced.
-    amountTolerancePct: Number(optional("PAYMENT_TOLERANCE_PCT") ?? 20),
-    validAmounts: (optional("VALID_AMOUNTS") ?? "3900,8700")
+    // 10% (was 20%) since the 2026-11-06 price change: at 20% an old-price
+    // Rs 8,700 transfer would auto-verify as a Rs 10,700 Advance. At 10% it
+    // lands in payment_review for a human, and the owner's 10% closing
+    // discount (6,030 / 9,630) still verifies.
+    amountTolerancePct: Number(optional("PAYMENT_TOLERANCE_PCT") ?? 10),
+    // Core 6,700 / Advance 10,700 / Core-to-Advance upgrade 4,000 (site, 2026-11-06)
+    validAmounts: (optional("VALID_AMOUNTS") ?? "6700,10700,4000")
       .split(",")
       .map((s) => Number(s.trim()))
       .filter((n) => Number.isFinite(n) && n > 0),

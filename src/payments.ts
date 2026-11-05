@@ -196,7 +196,7 @@ async function visionCheck(image: Buffer, mimeType: string): Promise<PaymentChec
  */
 /**
  * True when the paid amount lands within the configured tolerance of ANY
- * valid amount. Rs 3,750 against a Rs 3,900 plan is a sale, not a rejection.
+ * valid amount. Rs 6,500 against a Rs 6,700 plan is a sale, not a rejection.
  */
 function amountWithinTolerance(amount: number | null): boolean {
   if (amount === null || amount <= 0) return false;

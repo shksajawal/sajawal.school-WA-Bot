@@ -98,7 +98,7 @@ function yesterdayKey(): string {
   return d.toLocaleDateString("en-GB", { timeZone: "Asia/Karachi", day: "2-digit", month: "short" });
 }
 
-const AOV = 4890;
+const AOV = 7400; // Core-heavy mix at Rs 6,700 / 10,700 (prices updated 2026-11-06)
 
 /** Salman's action list with money at stake and carryover age. */
 async function buildSalmanList(forOwner = false): Promise<string> {

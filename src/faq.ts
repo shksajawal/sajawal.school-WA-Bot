@@ -64,8 +64,8 @@ const FAQS: Faq[] = [
   {
     id: "installments",
     test: /\b(installment|instalment|qist|kisht|do baar|two payments|half now|adha)\b/i,
-    en: "Installments aren't available, it's a single one time payment with lifetime access.\n\nCore is Rs 3,900. Should I send the account details?",
-    ur: "Installment ka option nahi hai, aik hi baar ki payment hai aur lifetime access mil jata hai.\n\nCore Rs 3,900 hai. Account details bhej doon?",
+    en: "Installments aren't available, it's a single one time payment with lifetime access.\n\nCore is Rs 6,700. Should I send the account details?",
+    ur: "Installment ka option nahi hai, aik hi baar ki payment hai aur lifetime access mil jata hai.\n\nCore Rs 6,700 hai. Account details bhej doon?",
   },
   {
     id: "trial",

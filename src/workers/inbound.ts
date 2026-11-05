@@ -306,7 +306,7 @@ const OPENER =
 // on the owner's explicit instruction.
 const MENU_WEBSITE_LINE =
   "Aik dafa beshak hamari website www.sajawal.school pe bhi saari details check kar lein, students ke reviews bhi www.sajawal.school/reviews pe dekh sakte hain, phir jo bhi sawal ho yahan aa kar pooch lein.";
-const MENU_PRICES_LINE = "Advance Rs 8,700, Core Rs 3,900, dono lifetime access.";
+const MENU_PRICES_LINE = "Advance Rs 10,700, Core Rs 6,700, dono lifetime access.";
 const MENU_CORE_FALLBACK =
   "Agar ap ko saray advance modules filhal ni chaien or sirf basics strong krna chahtay hen to core plan join kr skte hen.";
 const MENU_REPLIES: Record<string, string> = {
@@ -314,7 +314,7 @@ const MENU_REPLIES: Record<string, string> = {
   // 9 Advance sales; the Advance-first pitch was this segment's #1 chat killer).
   "1": [
     "Perfect. Hamare 70% students bilkul zero se start karte hain, aur yahin se grow karte hain, to ye aapke liye sab se best starting point hai.",
-    "Zero se start ke liye Core plan Rs 3,900 best hai: saari basics strong hoti hain aur aap online skills pe kaam shuru kar dete hain, lifetime access ke sath. Aur agar ap basic k sath sath sab advance trainings or live sessions bhe chahtay hen to beshak Advance plan (Rs 8,700) bhe join kr skte hen.",
+    "Zero se start ke liye Core plan Rs 6,700 best hai: saari basics strong hoti hain aur aap online skills pe kaam shuru kar dete hain, lifetime access ke sath. Aur agar ap basic k sath sath sab advance trainings or live sessions bhe chahtay hen to beshak Advance plan (Rs 10,700) bhe join kr skte hen.",
     MENU_WEBSITE_LINE,
     "Start karna chahein to batayein, main payment details bhej deta hoon \u{1F642}",
   ].join("\n\n"),
@@ -411,7 +411,7 @@ function prefillAnswer(firstMessage: string): string | null {
   if (/course duration/.test(t))
     return "8 week structured plan, but everything is recorded with lifetime access, so you go at your own pace and can start today.";
   if (/payment plans?/.test(t))
-    return "No installments, it's a one time payment with lifetime access: Core Rs 3,900 or Advance Rs 8,700.";
+    return "No installments, it's a one time payment with lifetime access: Core Rs 6,700 or Advance Rs 10,700.";
   if (/certification provided/.test(t))
     return "Yes, a certificate is available on request once you're through the program.";
   return null;

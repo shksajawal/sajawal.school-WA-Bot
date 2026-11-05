@@ -16,6 +16,13 @@ import { sendCapiEvent } from "../capi.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// People who said no, later, or stop get no scripted nudge. The 2026-10-05
+// audit found 28 of 45 "not interested" leads were still chased, and every
+// nightly review flagged the generic nudge after a "no" as the thing that
+// reads most like a machine.
+const OPT_OUT =
+  /\b(not interested|interested nahi|interest nahi|nahi chahiye|nhi chahiye|no thanks|no thank you|baad mein|baad me|bad me|later|abhi nahi|abhi nhi|stop|unsubscribe|rehne dein|rehne do|mat karo|mat karein|don'?t (message|msg|text)|block)\b/i;
+
 // Owner's final-touch message (2026-08-29): the "Present Day vs After One Day"
 // brain image with the Last Reminder caption. The uploaded media id is cached
 // in bot_state and refreshed before WhatsApp's ~30 day media expiry. If the
@@ -86,10 +93,19 @@ export function startFollowupWorker(): Worker {
 
       const sinceLastUserMsg = Date.now() - currentLast;
 
+      // Their last message was a no / later / stop: leave them alone.
+      const recentForOptOut = await getRecentMessages(contactId, 6);
+      const lastInbound = [...recentForOptOut].reverse().find((m) => m.direction === "in")?.body ?? "";
+      if (OPT_OUT.test(lastInbound)) return;
+
       if (sinceLastUserMsg < DAY_MS - 30 * 60 * 1000) {
         // Still inside the free-form window (with a 30min safety margin).
         // Owner-approved fixed scripts (2026-08-29), zero model cost:
-        //   touch 1, pre-payment:      decision-help one-liner
+        //   touch 1, pre-payment:      direct plan/details question (2026-11-06:
+        //                              replaced the open-ended "Anything I can
+        //                              answer..." line that 20+ nightly reviews
+        //                              named as the passive filler lost chats
+        //                              ended on; the review's own proposal)
         //   touch 1, payment_pending:  the human team's proven fee check-in
         //   touch 2 (final, ~20h):     "Last Reminder" image + caption
         const isFinalTouch = touch >= config.followup.maxTouches;
@@ -111,7 +127,7 @@ export function startFollowupWorker(): Worker {
                 : "Koi aur sawal ho ya kisi cheez pe guidance chahiye ho to pooch lein \u{1F642}"
               : contact.status === "payment_pending"
                 ? "Thought to check \u{1F603} Did you get the chance to send the fee, or did something come up?"
-                : "Anything I can answer for you to make the right decision?";
+                : "Core ya Advance, konsa suit kar raha hai? Payment details bhej doon? \u{1F642}";
           const waMsgId = await sendText(contact.wa_id, nudge);
           await insertMessage({ contactId, waMessageId: waMsgId, direction: "out", body: nudge });
         }
