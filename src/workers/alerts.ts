@@ -166,7 +166,7 @@ async function checkAll(): Promise<void> {
       WITH b AS (SELECT (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi') AS t0)
       SELECT count(*)::int AS n FROM messages, b
       WHERE direction='out' AND created_at >= b.t0
-        AND (body LIKE 'Core ya Advance, konsa suit%' OR body LIKE 'Anything I can answer%' OR body LIKE 'Thought to check%' OR body LIKE 'Last Reminder%')`);
+        AND (body LIKE 'Anything I can answer%' OR body LIKE 'Thought to check%' OR body LIKE 'Last Reminder%')`);
     const leads = await num(`
       WITH b AS (SELECT (date_trunc('day', now() AT TIME ZONE 'Asia/Karachi') AT TIME ZONE 'Asia/Karachi') AS t0)
       SELECT count(*)::int AS n FROM contacts, b WHERE created_at >= b.t0`);

@@ -101,11 +101,10 @@ export function startFollowupWorker(): Worker {
       if (sinceLastUserMsg < DAY_MS - 30 * 60 * 1000) {
         // Still inside the free-form window (with a 30min safety margin).
         // Owner-approved fixed scripts (2026-08-29), zero model cost:
-        //   touch 1, pre-payment:      direct plan/details question (2026-11-06:
-        //                              replaced the open-ended "Anything I can
-        //                              answer..." line that 20+ nightly reviews
-        //                              named as the passive filler lost chats
-        //                              ended on; the review's own proposal)
+        //   touch 1, pre-payment:      decision-help one-liner (owner kept this
+        //                              line on 2026-11-06 over a direct
+        //                              plan/details question; it is the human
+        //                              team's wording and stays)
         //   touch 1, payment_pending:  the human team's proven fee check-in
         //   touch 2 (final, ~20h):     "Last Reminder" image + caption
         const isFinalTouch = touch >= config.followup.maxTouches;
@@ -127,7 +126,7 @@ export function startFollowupWorker(): Worker {
                 : "Koi aur sawal ho ya kisi cheez pe guidance chahiye ho to pooch lein \u{1F642}"
               : contact.status === "payment_pending"
                 ? "Thought to check \u{1F603} Did you get the chance to send the fee, or did something come up?"
-                : "Core ya Advance, konsa suit kar raha hai? Payment details bhej doon? \u{1F642}";
+                : "Anything I can answer for you to make the right decision?";
           const waMsgId = await sendText(contact.wa_id, nudge);
           await insertMessage({ contactId, waMessageId: waMsgId, direction: "out", body: nudge });
         }
